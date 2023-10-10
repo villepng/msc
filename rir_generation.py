@@ -55,6 +55,7 @@ def generate_rir_audio(points: np.array, e_absorption: float, max_order: int, pa
     for audio in ['download.wav']:
         fs, audio_anechoic = wavfile.read(audio)
         for i, point_src in enumerate(points):
+            # todo: separate folder ('subject') for each snippet, or combine all x*y*(x*y-1) into one?
             for j, point_mic in enumerate(points):
                 if j == i:
                     continue
@@ -78,31 +79,31 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     :param source: source location (x, y, z), currently stays the same
     :param listener: listener location (x, y, z), currently stays the same
     :param fs: sample rate of the audio, used for generating coordinate data at 120 Hz
-    :param audio_length: length of the audio, used for generating coordinate data at 120
+    :param audio_length: length of the audio, used for generating coordinate data at 120 Hz
 
     :return: none
     """
     points = int(audio_length // fs * 120)
     # todo: separate folder for each audio and coordinate data thingy
-    s = open('source.txt', 'a')  # todo: check if exists or do already at folder level?
-    l = open('listener.txt', 'a')
+    source_file = open('tx_positions.txt', 'a')  # todo: check if exists or do already at folder level?
+    listener_file = open('rx_positions.txt', 'a')
     for i in range(points):
-        s.write(f'{source[0]}, {source[1]}, {source[2]}, 1.0, 0.0, 0.0, 0.0\n')
-        l.write(f'{listener[0]}, {listener[1]}, {listener[2]}, 1.0, 0.0, 0.0, 0.0\n')
-    s.close()
-    l.close()
+        source_file.write(f'{source[0]}, {source[1]}, {source[2]}, 1.0, 0.0, 0.0, 0.0\n')
+        listener_file.write(f'{listener[0]}, {listener[1]}, {listener[2]}, 1.0, 0.0, 0.0, 0.0\n')
+    source_file.close()
+    listener_file.close()
 
 
 # todo: startup args?
 def main():
     room_size = [10.0, 6.0, 3.0]
     grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([0.01, 0.01]), room_dim=np.array(room_size))
-    reverb_time = 0.5
+    reverb_time = 0.5  # todo: use 0.2 like in the original work's baseline?
     e_absorption, max_order = pra.inverse_sabine(reverb_time, room_size)
     save_path = 'D:\\Python\\tmp\\rir\\'  # todo: separate folder for each audio probably
     check_path(path=save_path)
     generate_rir_audio(points=grid, e_absorption=e_absorption, max_order=max_order, path=save_path,
-                       source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))  # todo: generate required coordinate files
+                       source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
 
 
 if __name__ == '__main__':
