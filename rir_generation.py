@@ -1,3 +1,4 @@
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import pathlib
@@ -7,6 +8,7 @@ from scipy.io import wavfile
 
 
 def check_path(path: str) -> None:
+    # todo: clear all since a specified folder structure is needed
     """ Check if path exists, create it if not and delete existing wav files it if it does
     :param path: path to check
 
@@ -37,14 +39,15 @@ def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = 
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio(points: np.array, e_absorption: float, max_order: int, path: str, source_height: float = 1.5,
-                       mic_height: float = 1.5, room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> None:
+def generate_rir_audio(points: np.array, e_absorption: float, max_order: int, data_path: str, save_path: str,
+                       source_height: float = 1.5, mic_height: float = 1.5, room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> None:
     """ Apply RIR for specified audio at specified points, for each point
     in the grid RIR applied audio at every other point is generated
     :param points: coordinate grid (x,y) in the room where RIR is calculated
     :param e_absorption: parameter for RIR calculation
     :param max_order: parameter for RIR calculation
-    :param path: folder where to save the created audios
+    :param data_path: folder where TIMIT dataset is saved
+    :param save_path: folder where to save the created audios
     :param source_height: height stays constant for all points, should be above 0 and smaller than z in room_size
     :param mic_height: height stays constant for all points, should be above 0 and smaller than z in room_size
     :param room_dim: room size x*y*z, where z is height
@@ -52,58 +55,79 @@ def generate_rir_audio(points: np.array, e_absorption: float, max_order: int, pa
     :return: None
 
     """
-    for audio in ['download.wav']:
-        fs, audio_anechoic = wavfile.read(audio)
-        for i, point_src in enumerate(points):
-            # todo: separate folder ('subject') for each snippet, or combine all x*y*(x*y-1) into one?
-            for j, point_mic in enumerate(points):
-                if j == i:
-                    continue
-                room = pra.ShoeBox(room_dim, fs=fs, materials=pra.Material(e_absorption), max_order=max_order)
-                room.add_source([point_src[0], point_src[1], source_height], signal=audio_anechoic, delay=0.5)
-                # print(f'Source: ({point_src[0]}, {point_src[1]}); Listener: ({point_mic[0]}, {point_mic[1]})')
-                room.add_microphone([point_mic[0], point_mic[1], mic_height])
-                room.simulate()
-                # room.plot_rir()
-                # plt.show()
-                room.mic_array.to_wav(f'{path}{audio.split(".")[0]}_rir_{i}-{j}.wav', norm=True, bitdepth=np.int16)
-                # save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]))
-                if i == 0 and j == 1:
-                    save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]),
-                                     fs=fs, audio_length=len(audio_anechoic))
+    audio_paths = get_audio_paths(data_path)
+    audio_index = 0
+    for i, point_src in enumerate(points):
+        for j, point_mic in enumerate(points):
+            fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
+            if j == i:
+                continue
+            room = pra.ShoeBox(room_dim, fs=fs, materials=pra.Material(e_absorption), max_order=max_order)
+            room.add_source([point_src[0], point_src[1], source_height], signal=audio_anechoic, delay=0.5)
+            room.add_microphone([point_mic[0], point_mic[1], mic_height])
+            room.simulate()
+            # room.plot_rir()
+            # plt.show()
+
+            pathlib.Path(f'{save_path}subject{audio_index}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible
+            wavfile.write(f'{save_path}subject{audio_index}\\mono.wav', fs, audio_anechoic.astype(np.int16))
+            room.mic_array.to_wav(f'{save_path}subject{audio_index}\\binaural.wav', norm=True, bitdepth=np.int16)
+            save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]),
+                             fs=fs, audio_length=len(audio_anechoic), path=f'{save_path}subject{audio_index}\\')
+
+            audio_index += 1
+            if audio_index == len(audio_paths):
+                audio_index = 0
 
 
-def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length: int) -> None:  # todo: update for moving sources/listeners (?)
+def get_audio_paths(path: str) -> np.array:
+    """ Use TIMIT dataset's train_data.csv to get paths to all files used for creating the training data
+    :param path: path to TIMIT data
+    :return: array with full paths to included wav files
+    """
+    paths = []
+    with open(f'{path}train_data.csv', newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            if row['is_converted_audio'] == 'TRUE':
+                paths.append(f'{path}data\\{row["path_from_data_dir"]}')
+    return np.array(paths)
+
+
+def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length: int, path: str) -> None:  # todo: update for moving sources/listeners (?)
     """ Save the required coordinate and quaternion data for each audio to make them work as input data to the machine learning method
-    todo: proper quaternions when directivity is used
+    todo: proper quaternions when directivity is used, testing with no quaternions for the first step
     :param source: source location (x, y, z), currently stays the same
     :param listener: listener location (x, y, z), currently stays the same
-    :param fs: sample rate of the audio, used for generating coordinate data at 120 Hz
-    :param audio_length: length of the audio, used for generating coordinate data at 120 Hz
+    :param fs: sample rate of the audio, used for generating coordinate data at fs/400 Hz
+    :param audio_length: length of the audio, used for generating coordinate data at fs/400 Hz
+    :param path: current subject folder under dataset
 
     :return: none
     """
-    points = int(audio_length // fs * 120)
+    points = int(audio_length // fs * (fs/400))
     # todo: separate folder for each audio and coordinate data thingy
-    source_file = open('tx_positions.txt', 'a')  # todo: check if exists or do already at folder level?
-    listener_file = open('rx_positions.txt', 'a')
+    source_file = open(f'{path}tx_positions.txt', 'a')
+    listener_file = open(f'{path}rx_positions.txt', 'a')
     for i in range(points):
-        source_file.write(f'{source[0]}, {source[1]}, {source[2]}, 1.0, 0.0, 0.0, 0.0\n')
-        listener_file.write(f'{listener[0]}, {listener[1]}, {listener[2]}, 1.0, 0.0, 0.0, 0.0\n')
+        source_file.write(f'{source[0]}, {source[1]}, {source[2]}\n')  # add quaternions later, e.g., 1.0, 0.0, 0.0, 0.0
+        listener_file.write(f'{listener[0]}, {listener[1]}, {listener[2]}\n')
     source_file.close()
     listener_file.close()
 
 
-# todo: startup args?
+# todo: startup args? (room size, grid, save and data folders etc.)
 def main():
     room_size = [10.0, 6.0, 3.0]
-    grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([0.01, 0.01]), room_dim=np.array(room_size))
-    reverb_time = 0.5  # todo: use 0.2 like in the original work's baseline?
-    e_absorption, max_order = pra.inverse_sabine(reverb_time, room_size)
+    grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=np.array(room_size))
+    reverb_time = 0.2
+    e_absorption, max_order = pra.inverse_sabine(reverb_time, room_size)  # todo: make more natural by having different coefficients for each wall etc.
+
+    audio_data_path = 'D:\\Python\\timit\\'  # using TIMIT dataset for now
     save_path = 'D:\\Python\\tmp\\rir\\'  # todo: separate folder for each audio probably
     check_path(path=save_path)
-    generate_rir_audio(points=grid, e_absorption=e_absorption, max_order=max_order, path=save_path,
-                       source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
+    generate_rir_audio(points=grid, e_absorption=e_absorption, max_order=max_order, data_path=audio_data_path,
+                       save_path=save_path, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
 
 
 if __name__ == '__main__':
