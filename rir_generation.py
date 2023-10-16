@@ -9,14 +9,14 @@ from scipy.io import wavfile
 
 def check_path(path: str) -> None:
     # todo: clear all since a specified folder structure is needed
-    """ Check if path exists, create it if not and delete existing wav files it if it does
+    """ Check if path exists, create it if not and delete existing files it if it does
     :param path: path to check
 
     :return: None
 
     """
     if pathlib.Path(path).is_dir():
-        [f.unlink() for f in pathlib.Path(path).glob('*.wav') if f.is_file()]
+        [f.unlink() for f in pathlib.Path(path).glob('*') if f.is_file()]
     else:
         pathlib.Path(path).mkdir(parents=True)
 
@@ -69,13 +69,18 @@ def generate_rir_audio(points: np.array, e_absorption: float, max_order: int, da
             # room.plot_rir()
             # plt.show()
 
-            pathlib.Path(f'{save_path}subject{audio_index}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible
-            wavfile.write(f'{save_path}subject{audio_index}\\mono.wav', fs, audio_anechoic.astype(np.int16))
-            room.mic_array.to_wav(f'{save_path}subject{audio_index}\\binaural.wav', norm=True, bitdepth=np.int16)
-            save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]),
-                             fs=fs, audio_length=len(audio_anechoic), path=f'{save_path}subject{audio_index}\\')
+            # tmp solution to match mono and rir mono lengths
+            length_rir = len(room.mic_array.signals[0])
+            mono = np.zeros([length_rir])
+            mono[0:len(audio_anechoic)] = audio_anechoic
 
-            audio_index += 1
+            pathlib.Path(f'{save_path}subject{audio_index + 1}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible
+            wavfile.write(f'{save_path}subject{audio_index + 1}\\mono.wav', fs, mono.astype(np.int16))
+            room.mic_array.to_wav(f'{save_path}subject{audio_index + 1}\\binaural.wav', norm=True, bitdepth=np.int16)
+            save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]),
+                             fs=fs, audio_length=length_rir, path=f'{save_path}subject{audio_index + 1}\\')
+
+            audio_index += 1  # todo: needs fixing when used for naming
             if audio_index == len(audio_paths):
                 audio_index = 0
 
@@ -105,13 +110,13 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 
     :return: none
     """
-    points = int(audio_length // fs * (fs/400))
+    points = int(audio_length / fs * (fs/400))
     # todo: separate folder for each audio and coordinate data thingy
     source_file = open(f'{path}tx_positions.txt', 'a')
     listener_file = open(f'{path}rx_positions.txt', 'a')
     for i in range(points):
-        source_file.write(f'{source[0]}, {source[1]}, {source[2]}\n')  # add quaternions later, e.g., 1.0, 0.0, 0.0, 0.0
-        listener_file.write(f'{listener[0]}, {listener[1]}, {listener[2]}\n')
+        source_file.write(f'{source[0]} {source[1]} {source[2]}\n')  # add quaternions later, e.g., 1.0 0.0 0.0 0.0
+        listener_file.write(f'{listener[0]} {listener[1]} {listener[2]}\n')
     source_file.close()
     listener_file.close()
 
@@ -124,7 +129,7 @@ def main():
     e_absorption, max_order = pra.inverse_sabine(reverb_time, room_size)  # todo: make more natural by having different coefficients for each wall etc.
 
     audio_data_path = 'D:\\Python\\timit\\'  # using TIMIT dataset for now
-    save_path = 'D:\\Python\\tmp\\rir\\'  # todo: separate folder for each audio probably
+    save_path = 'D:\\Python\\tmp\\rir\\'
     check_path(path=save_path)
     generate_rir_audio(points=grid, e_absorption=e_absorption, max_order=max_order, data_path=audio_data_path,
                        save_path=save_path, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
