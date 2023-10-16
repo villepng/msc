@@ -7,20 +7,6 @@ import pyroomacoustics as pra
 from scipy.io import wavfile
 
 
-def check_path(path: str) -> None:
-    # todo: clear all since a specified folder structure is needed
-    """ Check if path exists, create it if not and delete existing files it if it does
-    :param path: path to check
-
-    :return: None
-
-    """
-    if pathlib.Path(path).is_dir():
-        [f.unlink() for f in pathlib.Path(path).glob('*') if f.is_file()]
-    else:
-        pathlib.Path(path).mkdir(parents=True)
-
-
 def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = np.array([0.01, 0.01]),
                 room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> np.array:
     """ Create a grid of (x, y) coordinates with specified size
@@ -99,6 +85,19 @@ def get_audio_paths(path: str) -> np.array:
     return np.array(paths)
 
 
+def rm_tree(path: pathlib.Path) -> None:
+    """ Clear specified directory
+    :param path: pathlib object for path that fill be deleted
+    """
+    path_obj = pathlib.Path(path)
+    for child in path_obj.glob('*'):
+        if child.is_file():
+            child.unlink()
+        else:
+            rm_tree(child)
+    path.rmdir()
+
+
 def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length: int, path: str) -> None:  # todo: update for moving sources/listeners (?)
     """ Save the required coordinate and quaternion data for each audio to make them work as input data to the machine learning method
     todo: proper quaternions when directivity is used, testing with no quaternions for the first step
@@ -130,7 +129,8 @@ def main():
 
     audio_data_path = 'D:\\Python\\timit\\'  # using TIMIT dataset for now
     save_path = 'D:\\Python\\tmp\\rir\\'
-    check_path(path=save_path)
+    path_obj = pathlib.Path(save_path)
+    rm_tree(path_obj)  # clear old files
     generate_rir_audio(points=grid, e_absorption=e_absorption, max_order=max_order, data_path=audio_data_path,
                        save_path=save_path, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
 
