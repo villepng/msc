@@ -25,12 +25,12 @@ def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = 
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio(points: np.array, e_absorption: float, max_order: int, data_path: str, save_path: str,
+def generate_rir_audio(points: np.array, materials: dict, max_order: int, data_path: str, save_path: str,
                        source_height: float = 1.5, mic_height: float = 1.5, room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> None:
     """ Apply RIR for specified audio at specified points, for each point
     in the grid RIR applied audio at every other point is generated
     :param points: coordinate grid (x,y) in the room where RIR is calculated
-    :param e_absorption: parameter for RIR calculation
+    :param materials: room materials for RIR calculation
     :param max_order: parameter for RIR calculation
     :param data_path: folder where TIMIT dataset is saved
     :param save_path: folder where to save the created audios
@@ -48,7 +48,7 @@ def generate_rir_audio(points: np.array, e_absorption: float, max_order: int, da
             fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
             if j == i:
                 continue
-            room = pra.ShoeBox(room_dim, fs=fs, materials=pra.Material(e_absorption), max_order=max_order)
+            room = pra.ShoeBox(room_dim, fs=fs, materials=materials, max_order=max_order)
             room.add_source([point_src[0], point_src[1], source_height], signal=audio_anechoic, delay=0.5)
             room.add_microphone([point_mic[0], point_mic[1], mic_height])
             room.simulate()
@@ -122,16 +122,24 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 
 # todo: startup args? (room size, grid, save and data folders etc.)
 def main():
-    room_size = [10.0, 6.0, 3.0]
+    room_size = [10.0, 6.0, 2.5]
     grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=np.array(room_size))
-    reverb_time = 0.2
-    e_absorption, max_order = pra.inverse_sabine(reverb_time, room_size)  # todo: make more natural by having different coefficients for each wall etc.
+    # reverb_time = 0.2
+    # e_absorption, max_order = pra.inverse_sabine(reverb_time, room_size)
+    materials = pra.make_materials(
+        ceiling='wood_16mm',
+        floor='carpet_soft_10mm',
+        east='wood_16mm',
+        west='wood_16mm',
+        north='glass_window',
+        south='wooden_door',
+    )
 
     audio_data_path = 'D:\\Python\\timit\\'  # using TIMIT dataset for now
     save_path = 'D:\\Python\\tmp\\rir\\'
     path_obj = pathlib.Path(save_path)
     rm_tree(path_obj)  # clear old files
-    generate_rir_audio(points=grid, e_absorption=e_absorption, max_order=max_order, data_path=audio_data_path,
+    generate_rir_audio(points=grid, materials=materials, max_order=8, data_path=audio_data_path,
                        save_path=save_path, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
 
 
