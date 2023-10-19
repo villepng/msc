@@ -25,15 +25,15 @@ def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = 
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio(points: np.array, materials: dict, max_order: int, data_path: str, save_path: str,
+def generate_rir_audio(points: np.array, materials: dict, max_order: int, save_path: str, audio_paths: np.array,
                        source_height: float = 1.5, mic_height: float = 1.5, room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> None:
     """ Apply RIR for specified audio at specified points, for each point
     in the grid RIR applied audio at every other point is generated
     :param points: coordinate grid (x,y) in the room where RIR is calculated
     :param materials: room materials for RIR calculation
     :param max_order: parameter for RIR calculation
-    :param data_path: folder where TIMIT dataset is saved
     :param save_path: folder where to save the created audios
+    :param audio_paths: array with paths to audio dataset wav files
     :param source_height: height stays constant for all points, should be above 0 and smaller than z in room_size
     :param mic_height: height stays constant for all points, should be above 0 and smaller than z in room_size
     :param room_dim: room size x*y*z, where z is height
@@ -41,8 +41,8 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, data_p
     :return: None
 
     """
-    audio_paths = get_audio_paths(data_path)
     audio_index = 0
+    data_index = 0
     for i, point_src in enumerate(points):
         for j, point_mic in enumerate(points):
             fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
@@ -60,28 +60,30 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, data_p
             mono = np.zeros([length_rir])
             mono[0:len(audio_anechoic)] = audio_anechoic
 
-            pathlib.Path(f'{save_path}subject{audio_index + 1}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible
-            wavfile.write(f'{save_path}subject{audio_index + 1}\\mono.wav', fs, mono.astype(np.int16))
-            room.mic_array.to_wav(f'{save_path}subject{audio_index + 1}\\binaural.wav', norm=True, bitdepth=np.int16)
+            pathlib.Path(f'{save_path}\\subject{data_index + 1}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible
+            wavfile.write(f'{save_path}\\subject{data_index + 1}\\mono.wav', fs, mono.astype(np.int16))
+            room.mic_array.to_wav(f'{save_path}\\subject{data_index + 1}\\binaural.wav', norm=True, bitdepth=np.int16)
             save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]),
-                             fs=fs, audio_length=length_rir, path=f'{save_path}subject{audio_index + 1}\\')
+                             fs=fs, audio_length=length_rir, path=f'{save_path}\\subject{data_index + 1}\\')
 
-            audio_index += 1  # todo: needs fixing when used for naming
-            if audio_index == len(audio_paths):
+            audio_index += 1
+            data_index += 1
+            if audio_index == len(audio_paths):  # go through all audio snippets using different one for each data point and start over if needed
                 audio_index = 0
 
 
 def get_audio_paths(path: str) -> np.array:
-    """ Use TIMIT dataset's train_data.csv to get paths to all files used for creating the training data
+    """ Use TIMIT dataset's train/test_data.csv to get paths to all files used for creating the training data
     :param path: path to TIMIT data
     :return: array with full paths to included wav files
     """
     paths = []
-    with open(f'{path}train_data.csv', newline='') as csvfile:
+    with open(path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             if row['is_converted_audio'] == 'TRUE':
-                paths.append(f'{path}data\\{row["path_from_data_dir"]}')
+                path_start = '\\'.join(path.split('\\')[:-1])  # get path to timit folder from csv path
+                paths.append(f'{path_start}\\data\\{row["path_from_data_dir"]}')
     return np.array(paths)
 
 
@@ -139,8 +141,13 @@ def main():
     save_path = 'D:\\Python\\tmp\\rir\\'
     path_obj = pathlib.Path(save_path)
     rm_tree(path_obj)  # clear old files
-    generate_rir_audio(points=grid, materials=materials, max_order=8, data_path=audio_data_path,
-                       save_path=save_path, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
+
+    audio_paths = get_audio_paths(f'{audio_data_path}\\train_data.csv')
+    generate_rir_audio(points=grid, materials=materials, max_order=8, save_path=f'{save_path}\\trainset',
+                       audio_paths=audio_paths, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
+    audio_paths = get_audio_paths(f'{audio_data_path}\\test_data.csv')
+    generate_rir_audio(points=grid, materials=materials, max_order=8, save_path=f'{save_path}\\testset',
+                       audio_paths=audio_paths, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
 
 
 if __name__ == '__main__':
