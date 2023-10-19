@@ -10,11 +10,11 @@ from scipy.io import wavfile
 def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = np.array([0.01, 0.01]),
                 room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> np.array:
     """ Create a grid of (x, y) coordinates with specified size
+
     :param x_points: points in x-axis
     :param y_points: points in y-axis
     :param wall_gaps: distance of the first point from the wall in x and y direction
     :param room_dim: room size x*y*z, where z is height
-
     :return: numpy array with x,y coordinate pairs
 
     """
@@ -29,6 +29,7 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, save_p
                        source_height: float = 1.5, mic_height: float = 1.5, room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> None:
     """ Apply RIR for specified audio at specified points, for each point
     in the grid RIR applied audio at every other point is generated
+
     :param points: coordinate grid (x,y) in the room where RIR is calculated
     :param materials: room materials for RIR calculation
     :param max_order: parameter for RIR calculation
@@ -37,7 +38,6 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, save_p
     :param source_height: height stays constant for all points, should be above 0 and smaller than z in room_size
     :param mic_height: height stays constant for all points, should be above 0 and smaller than z in room_size
     :param room_dim: room size x*y*z, where z is height
-
     :return: None
 
     """
@@ -48,7 +48,7 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, save_p
             fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
             if j == i:
                 continue
-            room = pra.ShoeBox(room_dim, fs=fs, materials=materials, max_order=max_order)
+            room = pra.ShoeBox(room_dim, fs=fs, materials=materials, max_order=max_order, air_absorption=True)
             room.add_source([point_src[0], point_src[1], source_height], signal=audio_anechoic, delay=0.5)
             room.add_microphone([point_mic[0], point_mic[1], mic_height])
             room.simulate()
@@ -60,7 +60,7 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, save_p
             mono = np.zeros([length_rir])
             mono[0:len(audio_anechoic)] = audio_anechoic
 
-            pathlib.Path(f'{save_path}\\subject{data_index + 1}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible
+            pathlib.Path(f'{save_path}\\subject{data_index + 1}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible (?)
             wavfile.write(f'{save_path}\\subject{data_index + 1}\\mono.wav', fs, mono.astype(np.int16))
             room.mic_array.to_wav(f'{save_path}\\subject{data_index + 1}\\binaural.wav', norm=True, bitdepth=np.int16)
             save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]),
@@ -74,6 +74,7 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, save_p
 
 def get_audio_paths(path: str) -> np.array:
     """ Use TIMIT dataset's train/test_data.csv to get paths to all files used for creating the training data
+
     :param path: path to TIMIT data
     :return: array with full paths to included wav files
     """
@@ -89,6 +90,7 @@ def get_audio_paths(path: str) -> np.array:
 
 def rm_tree(path: pathlib.Path) -> None:
     """ Clear specified directory
+
     :param path: pathlib object for path that fill be deleted
     """
     path_obj = pathlib.Path(path)
@@ -102,17 +104,16 @@ def rm_tree(path: pathlib.Path) -> None:
 
 def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length: int, path: str) -> None:  # todo: update for moving sources/listeners (?)
     """ Save the required coordinate and quaternion data for each audio to make them work as input data to the machine learning method
+
     todo: proper quaternions when directivity is used, testing with no quaternions for the first step
     :param source: source location (x, y, z), currently stays the same
     :param listener: listener location (x, y, z), currently stays the same
     :param fs: sample rate of the audio, used for generating coordinate data at fs/400 Hz
     :param audio_length: length of the audio, used for generating coordinate data at fs/400 Hz
     :param path: current subject folder under dataset
-
     :return: none
     """
     points = int(audio_length / fs * (fs/400))
-    # todo: separate folder for each audio and coordinate data thingy
     source_file = open(f'{path}tx_positions.txt', 'a')
     listener_file = open(f'{path}rx_positions.txt', 'a')
     for i in range(points):
@@ -126,6 +127,9 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 def main():
     room_size = [10.0, 6.0, 2.5]
     grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=np.array(room_size))
+    max_order = 6
+    source_height = 1.5
+    mic_height = 1.5
     # reverb_time = 0.2
     # e_absorption, max_order = pra.inverse_sabine(reverb_time, room_size)
     materials = pra.make_materials(
@@ -143,11 +147,11 @@ def main():
     rm_tree(path_obj)  # clear old files
 
     audio_paths = get_audio_paths(f'{audio_data_path}\\train_data.csv')
-    generate_rir_audio(points=grid, materials=materials, max_order=8, save_path=f'{save_path}\\trainset',
-                       audio_paths=audio_paths, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
+    generate_rir_audio(points=grid, materials=materials, max_order=max_order, save_path=f'{save_path}\\trainset',
+                       audio_paths=audio_paths, source_height=source_height, mic_height=mic_height, room_dim=np.array(room_size))
     audio_paths = get_audio_paths(f'{audio_data_path}\\test_data.csv')
-    generate_rir_audio(points=grid, materials=materials, max_order=8, save_path=f'{save_path}\\testset',
-                       audio_paths=audio_paths, source_height=1.5, mic_height=1.5, room_dim=np.array(room_size))
+    generate_rir_audio(points=grid, materials=materials, max_order=max_order, save_path=f'{save_path}\\testset',
+                       audio_paths=audio_paths, source_height=source_height, mic_height=mic_height, room_dim=np.array(room_size))
 
 
 if __name__ == '__main__':
