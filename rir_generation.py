@@ -1,4 +1,5 @@
 import csv
+import masp
 import numpy as np
 import matplotlib.pyplot as plt
 import pathlib
@@ -60,11 +61,11 @@ def generate_rir_audio(points: np.array, materials: dict, max_order: int, save_p
             mono = np.zeros([length_rir])
             mono[0:len(audio_anechoic)] = audio_anechoic
 
-            pathlib.Path(f'{save_path}\\subject{data_index + 1}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible (?)
-            wavfile.write(f'{save_path}\\subject{data_index + 1}\\mono.wav', fs, mono.astype(np.int16))
-            room.mic_array.to_wav(f'{save_path}\\subject{data_index + 1}\\binaural.wav', norm=True, bitdepth=np.int16)
+            pathlib.Path(f'{save_path}/subject{data_index + 1}').mkdir(parents=True, exist_ok=True)  # todo: make more sensible (?)
+            wavfile.write(f'{save_path}/subject{data_index + 1}/mono.wav', fs, mono.astype(np.int16))
+            room.mic_array.to_wav(f'{save_path}/subject{data_index + 1}/binaural.wav', norm=True, bitdepth=np.int16)
             save_coordinates(source=np.array([point_src[0], point_src[1], source_height]), listener=np.array([point_mic[0], point_mic[1], mic_height]),
-                             fs=fs, audio_length=length_rir, path=f'{save_path}\\subject{data_index + 1}\\')
+                             fs=fs, audio_length=length_rir, path=f'{save_path}/subject{data_index + 1}/')
 
             audio_index += 1
             data_index += 1
@@ -83,8 +84,8 @@ def get_audio_paths(path: str) -> np.array:
         reader = csv.DictReader(csvfile)
         for row in reader:
             if row['is_converted_audio'] == 'TRUE':
-                path_start = '\\'.join(path.split('\\')[:-1])  # get path to timit folder from csv path
-                paths.append(f'{path_start}\\data\\{row["path_from_data_dir"]}')
+                path_start = '/'.join(path.split('/')[:-1])  # get path to timit folder from csv path
+                paths.append(f'{path_start}/data/{row["path_from_data_dir"]}')
     return np.array(paths)
 
 
@@ -94,6 +95,8 @@ def rm_tree(path: pathlib.Path) -> None:
     :param path: pathlib object for path that fill be deleted
     """
     path_obj = pathlib.Path(path)
+    if not path_obj.exists():
+        return
     for child in path_obj.glob('*'):
         if child.is_file():
             child.unlink()
@@ -141,16 +144,16 @@ def main():
         south='wooden_door',
     )
 
-    audio_data_path = 'D:\\Python\\timit\\'  # using TIMIT dataset for now
-    save_path = 'D:\\Python\\tmp\\rir\\'
-    path_obj = pathlib.Path(save_path)
-    rm_tree(path_obj)  # clear old files
+    parent_dir = str(pathlib.Path.cwd().parent)
+    audio_data_path = f'{parent_dir}/data/timit'  # using TIMIT dataset for now
+    save_path = f'{parent_dir}/data/generated/rir_mono'
+    rm_tree(pathlib.Path(save_path))  # clear old files
 
-    audio_paths = get_audio_paths(f'{audio_data_path}\\train_data.csv')
-    generate_rir_audio(points=grid, materials=materials, max_order=max_order, save_path=f'{save_path}\\trainset',
+    audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
+    generate_rir_audio(points=grid, materials=materials, max_order=max_order, save_path=f'{save_path}/trainset',
                        audio_paths=audio_paths, source_height=source_height, mic_height=mic_height, room_dim=np.array(room_size))
-    audio_paths = get_audio_paths(f'{audio_data_path}\\test_data.csv')
-    generate_rir_audio(points=grid, materials=materials, max_order=max_order, save_path=f'{save_path}\\testset',
+    audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
+    generate_rir_audio(points=grid, materials=materials, max_order=max_order, save_path=f'{save_path}/testset',
                        audio_paths=audio_paths, source_height=source_height, mic_height=mic_height, room_dim=np.array(room_size))
 
 
