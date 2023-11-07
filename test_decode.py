@@ -7,11 +7,11 @@ from scipy.io import wavfile
 
 def main():
     parent_dir = str(pathlib.Path.cwd().parent)
-    order = 1
+    order = 2
     components = (order + 1) ** 2
 
     for i in range(1, 13):
-        audio_data_path = f'{parent_dir}/data/generated/test/testset/subject{i}'
+        audio_data_path = f'{parent_dir}/data/generated/rir_ambisonic_test/testset/subject{i}'
         fs, mono = wavfile.read(f'{audio_data_path}/mono.wav')
 
         ambisonic = np.zeros((components, len(mono)))
