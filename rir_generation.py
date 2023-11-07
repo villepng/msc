@@ -27,7 +27,6 @@ def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = 
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-# todo: clean up
 def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = np.array([1.5, 1.5]), 
                           room: np.array = np.array([10.0, 6.0, 3.0]), rt60: np.array = np.array([0.2]), order: np.array = np.array([2])) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
@@ -49,7 +48,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     band_centerfreqs = np.empty(nBands)
     band_centerfreqs[0] = 1000
     # Absorption for approximately achieving the RT60 above - row per band
-    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]
+    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions
     # Critical distance for the room (where reverberation = direct sound)
     _, d_critical, _ = srs.room_stats(room, abs_wall)
 
@@ -67,9 +66,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # Echogram
             maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
             limits = np.minimum(rt60, maxlim)
-        
-            # Compute echograms
-            # abs_echograms, rec_echograms, echograms = srs.compute_echograms_sh(room, src, rec, abs_wall, limits, rec_orders)
             abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)  # todo: check that coordinate systems match
             
             # In this case all the information (e.g. SH directivities) are already
@@ -117,7 +113,7 @@ def get_audio_paths(path: str) -> np.array:
 def get_sn3d_norm_coefficients(order: int) -> list:
     """ Get list with coefficients for converting N3D norm into SN3D norm
     
-    :param order: ampisonics order
+    :param order: ambisonics order
     """
     sn3d = [1]
     i = 1
@@ -167,27 +163,23 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 
 # todo: startup args? (room size, grid, save and data folders etc.)
 def main():
-    room = np.array([10.0, 6.0, 2.5])
-    grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=np.array(room))
-    source_height = 1.5
-    listener_height = 1.5
+    room = np.array([10.0, 6.0, 3.0])
+    grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=room)
+    heights = np.array([1.5, 1.5])  # source, listener
     rt60 = np.array([0.2])
     order = np.array([1])
 
-    # todo: e.g., order as parameter for folder naming?
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/data/timit'  # using TIMIT dataset for now
-    save_path = f'{parent_dir}/data/generated/rir_ambisonic_test'
+    save_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{order}'
     rm_tree(pathlib.Path(save_path))  # clear old files
 
     # train data in save path under trainset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
-    generate_rir_audio_sh(points=grid, save_path=f'{save_path}/trainset', audio_paths=audio_paths, 
-                          heights=np.array([source_height, listener_height]), room=room, rt60=rt60, order=order)
+    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, heights, room, rt60, order)
     # test data in save path under testset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
-    generate_rir_audio_sh(points=grid, save_path=f'{save_path}/testset', audio_paths=audio_paths, 
-                          heights=np.array([source_height, listener_height]), room=room, rt60=rt60, order=order)
+    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, heights, room, rt60, order)
 
 
 if __name__ == '__main__':
