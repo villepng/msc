@@ -18,7 +18,7 @@ def main():
         for j in range(components):
             _, part = wavfile.read(f'{audio_data_path}/ambisonic_{j}.wav')
             ambisonic[j, :] = part
-        hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa', order)
+        hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa', order)  # todo: proper hrir and directivity stuff
 
         binaural = spa.decoder.sh2bin(ambisonic, hrir)
         wavfile.write(f'{parent_dir}/data/out/binaural_{i}.wav', fs, binaural.astype(np.int16).T)

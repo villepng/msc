@@ -2,7 +2,6 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import pathlib
-import pyroomacoustics as pra
 
 from masp import shoebox_room_sim as srs
 from scipy.io import wavfile
@@ -28,7 +27,7 @@ def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = 
 
 
 def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = np.array([1.5, 1.5]), 
-                          room: np.array = np.array([10.0, 6.0, 3.0]), rt60: np.array = np.array([0.2]), order: np.array = np.array([2])) -> None:
+                          room: np.array = np.array([10.0, 6.0, 3.0]), rt60: np.array = np.array([0.2]), order: int = 2) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated
 
@@ -42,14 +41,14 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     :return: None
 
     """
-    components = (order[0] + 1) ** 2
+    components = (order + 1) ** 2
     nBands = len(rt60)
     # todo: check the variables below
     band_centerfreqs = np.empty(nBands)
     band_centerfreqs[0] = 1000
     # Absorption for approximately achieving the RT60 above - row per band
     abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions
-    # Critical distance for the room (where reverberation = direct sound)
+    # Critical distance for the room (where reverberation = direct sound, check and warn if src->lstn is bigger?)
     _, d_critical, _ = srs.room_stats(room, abs_wall)
 
     audio_index = 0
@@ -66,14 +65,14 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # Echogram
             maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
             limits = np.minimum(rt60, maxlim)
-            abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)  # todo: check that coordinate systems match
+            abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, np.array([order]))
             
             # In this case all the information (e.g. SH directivities) are already
             # encoded in the echograms, hence they are rendered directly to discrete RIRs
             sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
-            if order[0] == 0:
+            if order == 0:
                 sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
-            sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order=order[0])
+            sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
             #plt.figure()
             #plt.plot(sh_rirs)
             #plt.show()
@@ -167,7 +166,7 @@ def main():
     grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=room)
     heights = np.array([1.5, 1.5])  # source, listener
     rt60 = np.array([0.2])
-    order = np.array([1])
+    order = 1
 
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/data/timit'  # using TIMIT dataset for now
