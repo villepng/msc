@@ -1,3 +1,4 @@
+import argparse
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -160,9 +161,19 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     listener_file.close()
 
 
-# todo: startup args? (room size, grid, save and data folders etc.)
 def main():
-    room = np.array([10.0, 6.0, 3.0])
+    parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics')
+    parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal"
+    parser.add_argument('-s', '--save_path', default='data/timit', type=str, help='path (from current parent folder) where to save the generated dataset')
+    parser.add_argument('-r', '--room', default=[10.0, 6.0, 3.0], type=list, help='room size as [x, y, z]')
+    parser.add_argument('-g', '--grid', default=[2, 2], type=list, help='grid points in each axis [x, y]')
+    parser.add_argument('-w', '--wall_gaps', default=[1.0, 1.0], type=list, help='minimum gap between walls and grid points [x, y]')
+    parser.add_argument('--heights', default=[1.5, 1.5], type=list, help='heights for the source and the listener')
+    parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
+    parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
+    args = parser.parse_args()
+
+    room = np.array(args.room)
     grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=room)
     heights = np.array([1.5, 1.5])  # source, listener
     rt60 = np.array([0.2])
