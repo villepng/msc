@@ -9,26 +9,24 @@ from scipy.io import wavfile
 from scipy.signal import fftconvolve
 
 
-def create_grid(x_points: int = 100, y_points: int = 100, wall_gaps: np.array = np.array([1.0, 1.0]),
-                room_dim: np.array = np.array([10.0, 6.0, 3.0])) -> np.array:
+def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
     """ Create a grid of (x, y) coordinates with specified amount of points (x_points * y_points)
 
-    :param x_points: points in x-axis
-    :param y_points: points in y-axis
-    :param wall_gaps: distance of the first point from the wall in x and y direction
+    :param points: grid points in x and y directions, total points will be x*y
+    :param wall_gap: minimum distance between walls and grid points
     :param room_dim: room size x*y*z, where z is height
     :return: numpy array with x,y coordinate pairs
 
     """
-    x = np.linspace(wall_gaps[0], room_dim[0] - wall_gaps[0], x_points)
-    y = np.linspace(wall_gaps[1], room_dim[1] - wall_gaps[1], y_points)
+    x = np.linspace(wall_gap, room_dim[0] - wall_gap, points[0])
+    y = np.linspace(wall_gap, room_dim[1] - wall_gap, points[1])
     xx, yy = np.meshgrid(x, y)
 
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = np.array([1.5, 1.5]), 
-                          room: np.array = np.array([10.0, 6.0, 3.0]), rt60: np.array = np.array([0.2]), order: int = 2) -> None:
+def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array, 
+                          room: np.array, rt60: float, order: int) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated
 
@@ -42,6 +40,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     :return: None
 
     """
+    rt60 = np.array([rt60])
     components = (order + 1) ** 2
     nBands = len(rt60)
     # todo: check the variables below
@@ -55,18 +54,18 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     audio_index = 0
     data_index = 0
     for i, src_pos in enumerate(points):
-        for j, lstn_pos in enumerate(points):
+        for j, recv_pos in enumerate(points):
             fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
             if j == i:
                 continue  # skip if source and listener are at the same point
 
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
-            receiver = np.array([[lstn_pos[0], lstn_pos[1], heights[1]]])
+            receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
         
             # Echogram
             maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
             limits = np.minimum(rt60, maxlim)
-            abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, np.array([order]))
+            abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
             
             # In this case all the information (e.g. SH directivities) are already
             # encoded in the echograms, hence they are rendered directly to discrete RIRs
@@ -86,7 +85,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
                 wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic_{k}.wav', fs, reverberant_signal[:, k].astype(np.int16))
 
-            save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([lstn_pos[0], lstn_pos[1], heights[1]]),
+            save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
                              fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}/')
 
             audio_index += 1
@@ -123,6 +122,18 @@ def get_sn3d_norm_coefficients(order: int) -> list:
             sn3d.append(1. / np.sqrt(root))
         i += 1
     return sn3d
+
+def parse_input_args():
+    parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics with specified order')
+    parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal"
+    parser.add_argument('-s', '--save_path', default='data/timit', type=str, help='path (from current parent folder) where to save the generated dataset')
+    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('x', 'y', 'z'))
+    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: change to 100 later?
+    parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
+    parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
+    parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
+    parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
+    return parser.parse_args()
 
 def rm_tree(path: pathlib.Path) -> None:
     """ Clear specified directory
@@ -161,35 +172,23 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     listener_file.close()
 
 
+# todo: fix type hints and function documentations
 def main():
-    parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics')
-    parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal"
-    parser.add_argument('-s', '--save_path', default='data/timit', type=str, help='path (from current parent folder) where to save the generated dataset')
-    parser.add_argument('-r', '--room', default=[10.0, 6.0, 3.0], type=list, help='room size as [x, y, z]')
-    parser.add_argument('-g', '--grid', default=[2, 2], type=list, help='grid points in each axis [x, y]')
-    parser.add_argument('-w', '--wall_gaps', default=[1.0, 1.0], type=list, help='minimum gap between walls and grid points [x, y]')
-    parser.add_argument('--heights', default=[1.5, 1.5], type=list, help='heights for the source and the listener')
-    parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
-    parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
-    args = parser.parse_args()
+    args = parse_input_args()
 
-    room = np.array(args.room)
-    grid = create_grid(x_points=2, y_points=2, wall_gaps=np.array([1.0, 1.0]), room_dim=room)
-    heights = np.array([1.5, 1.5])  # source, listener
-    rt60 = np.array([0.2])
-    order = 1
+    grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/data/timit'  # using TIMIT dataset for now
-    save_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{order}'
+    save_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{args.order}'
     rm_tree(pathlib.Path(save_path))  # clear old files
 
     # train data in save path under trainset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, heights, room, rt60, order)
+    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order)
     # test data in save path under testset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, heights, room, rt60, order)
+    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order)
 
 
 if __name__ == '__main__':
