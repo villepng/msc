@@ -1,5 +1,4 @@
 .idea/
+.vscode/
 *.txt
 *.wav
-
-tmp.py
