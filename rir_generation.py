@@ -31,9 +31,9 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     for each point in the grid RIR applied audio at every other point is generated
 
     :param points: coordinate grid (x,y) in the room where RIR is calculated
-    :param save_path: folder where to save the created audios
+    :param save_path: folder where to save the created audio files
     :param audio_paths: array with paths to audio dataset wav files
-    :param heights: array with source height and listener height, heights stay constant for all points
+    :param heights: array with source height and listener height, currently heights stay constant for all points
     :param room: room size x*y*z, where z is height
     :param rt60: reverberation time
     :param order: ambisonics order used
@@ -111,7 +111,7 @@ def get_audio_paths(path: str) -> np.array:
 
 def get_sn3d_norm_coefficients(order: int) -> list:
     """ Get list with coefficients for converting N3D norm into SN3D norm
-    
+
     :param order: ambisonics order
     """
     sn3d = [1]
@@ -127,7 +127,7 @@ def parse_input_args():
     parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics with specified order')
     parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal"
     parser.add_argument('-s', '--save_path', default='data/timit', type=str, help='path (from current parent folder) where to save the generated dataset')
-    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('x', 'y', 'z'))
+    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))
     parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: change to 100 later?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
@@ -154,7 +154,7 @@ def rm_tree(path: pathlib.Path) -> None:
 def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length: int, path: str) -> None:  # todo: update for moving sources/listeners (?)
     """ Save the required coordinate and quaternion data for each audio to make them work as input data to the machine learning method
 
-    todo: proper quaternions when directivity is used, testing with no quaternions for the first step
+    todo: proper quaternions when directivity is used, testing with no quaternions for the first step (possibility of only using angles?)
     :param source: source location (x, y, z), currently stays the same
     :param listener: listener location (x, y, z), currently stays the same
     :param fs: sample rate of the audio, used for generating coordinate data at fs/400 Hz

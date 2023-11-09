@@ -10,7 +10,7 @@ def main():
     order = 1
     components = (order + 1) ** 2
 
-    for i in range(1, 13):
+    for i in range(1, 13):  # todo: grid points as a parameter (starup args?)
         audio_data_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{order}/testset/subject{i}'
         fs, mono = wavfile.read(f'{audio_data_path}/mono.wav')
 
@@ -18,6 +18,8 @@ def main():
         for j in range(components):
             _, part = wavfile.read(f'{audio_data_path}/ambisonic_{j}.wav')
             ambisonic[j, :] = part
+        # currently elevation angle will be 0 with the azimuth changing
+        # rx file will be the origin, calculate angle with it and tx:s location, and select correct hrir (ineterpolate?)
         hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa', order)  # todo: proper hrir and directivity stuff (?)
 
         binaural = spa.decoder.sh2bin(ambisonic, hrir)
