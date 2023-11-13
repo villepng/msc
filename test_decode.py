@@ -6,6 +6,7 @@ import spaudiopy as spa  # currently requires python versions >=3.6 but < 3.12
 from scipy.io import wavfile
 
 
+# probably not needed currently
 def get_hrir(data_path: str):
     """ Get HRIR at the correct angle based on the angle between the source
     and the receiver (position data in rx and tx files respectively)
@@ -24,7 +25,7 @@ def get_hrir(data_path: str):
     angle = np.arctan2(src_pos[1] - rcv_pos[1], src_pos[0] - rcv_pos[0]) + np.pi / 2
     if angle < 0:
         angle = angle + 2 * np.pi
-    #print(f'source: {src_pos[0:2]}, receiver: {rcv_pos[0:2]}, angle: {angle * 180 / np.pi}')
+    print(f'source: {src_pos[0:2]}, receiver: {rcv_pos[0:2]}, angle: {angle * 180 / np.pi}')
     # todo: use angle to get the correct hrir and return it, angles might need tweaking (what is front etc.)
 
 
@@ -45,7 +46,8 @@ def main():
         # currently elevation angle will be 0 with the azimuth changing
         # rx file will be the origin, calculate angle with it and tx:s location, and select correct hrir (ineterpolate?)
         get_hrir(audio_data_path)  # todo
-        hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa', order)  # todo: proper hrir and directivity stuff (?)
+        #tmp = spa.io.load_sofa_data(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa')
+        hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa', order)  # todo: fix directionality
 
         binaural = spa.decoder.sh2bin(ambisonic, hrir)
         wavfile.write(f'{parent_dir}/data/out/binaural_{i}.wav', fs, binaural.astype(np.int16).T)  # todo: create and name folder
