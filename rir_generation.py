@@ -25,11 +25,16 @@ def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.arr
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-# todo: from left to to left ground
 def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array, 
                           room: np.array, rt60: float, order: int) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated
+    Coordinate system (Z direction is 'up' from the screen, i.e. the height):
+    ^
+    |
+    X
+    |
+    O ⎯ Y ⎯ >
 
     :param points: coordinate grid (x,y) in the room where RIR is calculated
     :param save_path: folder where to save the created audio files
