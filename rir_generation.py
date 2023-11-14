@@ -89,7 +89,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             wavfile.write(f'{save_path}/subject{data_index + 1}/mono.wav', fs, audio_anechoic.astype(np.int16))
             for k in range(components):
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
-                wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic_{k}.wav', fs, reverberant_signal[:, k].astype(np.int16))
+            wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
 
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
                              fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}/')

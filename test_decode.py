@@ -32,20 +32,15 @@ def get_hrir(data_path: str):
 
 def main():
     parent_dir = str(pathlib.Path.cwd().parent)
-    order = 3
-    components = (order + 1) ** 2
+    order = 1
 
     for i in range(1, 13):  # todo: grid points as a parameter (starup args?)
         audio_data_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{order}/testset/subject{i}'
-        fs, mono = wavfile.read(f'{audio_data_path}/mono.wav')
+        fs, ambisonic = wavfile.read(f'{audio_data_path}/ambisonic.wav')
 
-        ambisonic = np.zeros((components, len(mono)))
-        for j in range(components):
-            _, part = wavfile.read(f'{audio_data_path}/ambisonic_{j}.wav')
-            ambisonic[j, :] = part
         hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa', order)
-
-        binaural = spa.decoder.sh2bin(ambisonic, hrir)
+        binaural = spa.decoder.sh2bin(ambisonic.T, hrir)
+    
         wavfile.write(f'{parent_dir}/data/out/binaural_{i}.wav', fs, binaural.astype(np.int16).T)  # todo: create and name folder
 
 
