@@ -68,7 +68,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
         
-            # Echogram
             maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
             limits = np.minimum(rt60, maxlim)
             abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
@@ -111,7 +110,7 @@ def get_audio_paths(path: str) -> np.array:
         reader = csv.DictReader(csvfile)
         for row in reader:
             if row['is_converted_audio'] == 'TRUE':
-                path_start = '/'.join(path.split('/')[:-1])  # get path to timit folder from csv path
+                path_start = '/'.join(path.split('/')[:-1])  # get path to timit's data folder from csv file path
                 paths.append(f'{path_start}/data/{row["path_from_data_dir"]}')
     return np.array(paths)
 
@@ -131,8 +130,9 @@ def get_sn3d_norm_coefficients(order: int) -> list:
 
 def parse_input_args():
     parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics with specified order')
-    parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal"
-    parser.add_argument('-s', '--save_path', default='data/timit', type=str, help='path (from current parent folder) where to save the generated dataset')
+    parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal" (?)
+    parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, \
+                        will be saved in a folder named based on the ambisonics order')
     parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))
     parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: change to 100 later?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
@@ -142,7 +142,7 @@ def parse_input_args():
     return parser.parse_args()
 
 def rm_tree(path: pathlib.Path) -> None:
-    """ Clear specified directory
+    """ Clear specified directory and all subdirectories & files
 
     :param path: pathlib object for path that fill be deleted
     """
@@ -185,8 +185,8 @@ def main():
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
     parent_dir = str(pathlib.Path.cwd().parent)
-    audio_data_path = f'{parent_dir}/data/timit'  # using TIMIT dataset for now
-    save_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{args.order}'
+    audio_data_path = f'{parent_dir}/{args.dataset_path}'
+    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}'
     rm_tree(pathlib.Path(save_path))  # clear old files
 
     # train data in save path under trainset folder

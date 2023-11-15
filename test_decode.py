@@ -26,7 +26,7 @@ def get_hrir(data_path: str):
     if angle < 0:
         angle = angle + 2 * np.pi
     print(f'source: {src_pos[0:2]}, receiver: {rcv_pos[0:2]}, angle: {angle * 180 / np.pi}')
-    # todo: use angle to get the correct hrir and return it, angles might need tweaking (what is front etc.)
+    # todo: use angle to get the correct hrir and return it
 
 
 
