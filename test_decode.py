@@ -5,6 +5,8 @@ import spaudiopy as spa  # currently requires python versions >=3.6 but < 3.12
 
 from scipy.io import wavfile
 
+from rir_generation import rm_tree
+
 
 # not needed currently, can be used to check angles
 def get_hrir(data_path: str):
@@ -29,19 +31,25 @@ def get_hrir(data_path: str):
     # todo: use angle to get the correct hrir and return it
 
 
-
 def main():
-    parent_dir = str(pathlib.Path.cwd().parent)
     order = 1
+    parent_dir = str(pathlib.Path.cwd().parent)
+    save_path = f'{parent_dir}/data/out/order_{order}'
 
-    for i in range(1, 13):  # todo: grid points as a parameter (starup args?)
-        audio_data_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{order}/testset/subject{i}'
+    data_path_obj = pathlib.Path(f'{parent_dir}/data/generated/rir_ambisonics_order_{order}/testset')
+    subjects = len([p for p in data_path_obj.iterdir() if p.is_dir()])
+
+    rm_tree(pathlib.Path(save_path))  # clear old files
+    pathlib.Path(save_path).mkdir(parents=True)
+
+    for i in range(1, subjects + 1):  # subject indexing starts from 1 due to how the ML method is set up
+        audio_data_path = f'{str(data_path_obj)}/subject{i}'
         fs, ambisonic = wavfile.read(f'{audio_data_path}/ambisonic.wav')
 
         hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/data/irs etc/mit_kemar_normal_pinna.sofa', order)
         binaural = spa.decoder.sh2bin(ambisonic.T, hrir)
     
-        wavfile.write(f'{parent_dir}/data/out/binaural_{i}.wav', fs, binaural.astype(np.int16).T)  # todo: create and name folder
+        wavfile.write(f'{save_path}/binaural_{i}.wav', fs, binaural.astype(np.int16).T)  # todo: create and name folder
 
 
 if __name__ == '__main__':

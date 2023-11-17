@@ -186,7 +186,7 @@ def main():
 
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
-    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}'
+    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}'  # include grid size in the name?
     rm_tree(pathlib.Path(save_path))  # clear old files
 
     # train data in save path under trainset folder
