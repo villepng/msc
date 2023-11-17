@@ -114,6 +114,7 @@ def get_audio_paths(path: str) -> np.array:
                 paths.append(f'{path_start}/data/{row["path_from_data_dir"]}')
     return np.array(paths)
 
+
 def get_sn3d_norm_coefficients(order: int) -> list:
     """ Get list with coefficients for converting N3D norm into SN3D norm
 
@@ -128,6 +129,7 @@ def get_sn3d_norm_coefficients(order: int) -> list:
         i += 1
     return sn3d
 
+
 def parse_input_args():
     parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics with specified order')
     parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal" (?)
@@ -140,6 +142,7 @@ def parse_input_args():
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
     return parser.parse_args()
+
 
 def rm_tree(path: pathlib.Path) -> None:
     """ Clear specified directory and all subdirectories & files
