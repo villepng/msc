@@ -29,11 +29,17 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                           room: np.array, rt60: float, order: int) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated
+    Coordinate system (Z direction is 'up' from the screen, i.e. the height):
+    ^
+    |
+    X
+    |
+    O ⎯ Y ⎯ >
 
     :param points: coordinate grid (x,y) in the room where RIR is calculated
-    :param save_path: folder where to save the created audios
+    :param save_path: folder where to save the created audio files
     :param audio_paths: array with paths to audio dataset wav files
-    :param heights: array with source height and listener height, heights stay constant for all points
+    :param heights: array with source height and listener height, currently heights stay constant for all points
     :param room: room size x*y*z, where z is height
     :param rt60: reverberation time
     :param order: ambisonics order used
@@ -62,7 +68,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
         
-            # Echogram
             maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
             limits = np.minimum(rt60, maxlim)
             abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
@@ -83,7 +88,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             wavfile.write(f'{save_path}/subject{data_index + 1}/mono.wav', fs, audio_anechoic.astype(np.int16))
             for k in range(components):
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
-                wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic_{k}.wav', fs, reverberant_signal[:, k].astype(np.int16))
+            wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
 
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
                              fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}/')
@@ -105,13 +110,14 @@ def get_audio_paths(path: str) -> np.array:
         reader = csv.DictReader(csvfile)
         for row in reader:
             if row['is_converted_audio'] == 'TRUE':
-                path_start = '/'.join(path.split('/')[:-1])  # get path to timit folder from csv path
+                path_start = '/'.join(path.split('/')[:-1])  # get path to timit's data folder from csv file path
                 paths.append(f'{path_start}/data/{row["path_from_data_dir"]}')
     return np.array(paths)
 
+
 def get_sn3d_norm_coefficients(order: int) -> list:
     """ Get list with coefficients for converting N3D norm into SN3D norm
-    
+
     :param order: ambisonics order
     """
     sn3d = [1]
@@ -123,11 +129,13 @@ def get_sn3d_norm_coefficients(order: int) -> list:
         i += 1
     return sn3d
 
+
 def parse_input_args():
     parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics with specified order')
-    parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal"
-    parser.add_argument('-s', '--save_path', default='data/timit', type=str, help='path (from current parent folder) where to save the generated dataset')
-    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('x', 'y', 'z'))
+    parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal" (?)
+    parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, \
+                        will be saved in a folder named based on the ambisonics order')
+    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))
     parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: change to 100 later?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
@@ -135,8 +143,9 @@ def parse_input_args():
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
     return parser.parse_args()
 
+
 def rm_tree(path: pathlib.Path) -> None:
-    """ Clear specified directory
+    """ Clear specified directory and all subdirectories & files
 
     :param path: pathlib object for path that fill be deleted
     """
@@ -154,7 +163,7 @@ def rm_tree(path: pathlib.Path) -> None:
 def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length: int, path: str) -> None:  # todo: update for moving sources/listeners (?)
     """ Save the required coordinate and quaternion data for each audio to make them work as input data to the machine learning method
 
-    todo: proper quaternions when directivity is used, testing with no quaternions for the first step
+    todo: proper quaternions when directivity is used, testing with no quaternions for the first step (possibility of only using angles?)
     :param source: source location (x, y, z), currently stays the same
     :param listener: listener location (x, y, z), currently stays the same
     :param fs: sample rate of the audio, used for generating coordinate data at fs/400 Hz
@@ -179,8 +188,8 @@ def main():
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
     parent_dir = str(pathlib.Path.cwd().parent)
-    audio_data_path = f'{parent_dir}/data/timit'  # using TIMIT dataset for now
-    save_path = f'{parent_dir}/data/generated/rir_ambisonics_order_{args.order}'
+    audio_data_path = f'{parent_dir}/{args.dataset_path}'
+    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}'  # include grid size in the name?
     rm_tree(pathlib.Path(save_path))  # clear old files
 
     # train data in save path under trainset folder
