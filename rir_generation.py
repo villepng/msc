@@ -66,7 +66,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
 
             fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
             audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))
-            tt = len(audio_anechoic) % 400
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
         
