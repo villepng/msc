@@ -1,5 +1,7 @@
 import argparse
 import csv
+import sys
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pathlib
@@ -185,13 +187,19 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 # todo: fix type hints and function documentations
 def main():
     args = parse_input_args()
-
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
     save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}'  # include grid size in the name?
-    rm_tree(pathlib.Path(save_path))  # clear old files
+    if pathlib.Path(save_path).is_dir():
+        answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')
+        if answer.lower() in ['y', 'yes']:
+            rm_tree(pathlib.Path(save_path))
+        else:
+            sys.exit()
+    else:
+        rm_tree(pathlib.Path(save_path))  # clear old files
 
     # train data in save path under trainset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
