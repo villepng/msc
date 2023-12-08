@@ -1,10 +1,8 @@
 import argparse
 import csv
-import sys
-
 import numpy as np
-import matplotlib.pyplot as plt
 import pathlib
+import sys
 import tqdm
 
 from masp import shoebox_room_sim as srs
@@ -13,6 +11,7 @@ from scipy.signal import fftconvolve
 
 
 RIRS = {}
+SOUND_V = 343
 
 
 def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
@@ -32,7 +31,7 @@ def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.arr
 
 
 def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array, 
-                          room: np.array, rt60: float, order: int) -> None:
+                          room: np.array, rt60: float, order: int, rm_delay: bool) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated
     Coordinate system (Z direction is 'up' from the screen, i.e. the height):
@@ -49,6 +48,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     :param room: room size x*y*z, where z is height
     :param rt60: reverberation time
     :param order: ambisonics order used
+    :param rm_delay: true if sound travel time delay should be removed from generated audio
     :return: None
 
     """
@@ -73,6 +73,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
+            if rm_delay:
+                delay_samples = int( ((src_pos[0] - recv_pos[0]) ** 2 + (src_pos[1] - recv_pos[1]) ** 2 + (heights[0] - heights[1]) ** 2) ** (1/2) / SOUND_V * fs )
 
             if f'{i}-{j}' in RIRS:
                 sh_rirs = RIRS[f'{i}-{j}']
@@ -93,6 +95,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             wavfile.write(f'{save_path}/subject{data_index + 1}/mono.wav', fs, audio_anechoic.astype(np.int16))
             for k in range(components):
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
+                if rm_delay:
+                    reverberant_signal[:delay_samples, k] = 0  # todo: save information
             wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
 
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
@@ -146,6 +150,7 @@ def parse_input_args():
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
+    parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
     return parser.parse_args()
 
 
@@ -204,13 +209,13 @@ def main():
     else:
         rm_tree(pathlib.Path(save_path))  # clear old files
 
-    # todo: save and utilise generated rirs, generate testset differently (smaller, different points?)
+    # todo: save generated rirs in a file? (arg option), generate testset differently (smaller, different points?)
     # train data in save path under trainset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order)
+    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order, args.rm_delay)
     # test data in save path under testset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order)
+    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order, args.rm_delay)
 
 
 if __name__ == '__main__':
