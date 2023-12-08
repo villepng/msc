@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import pathlib
+import tqdm
 
 from masp import shoebox_room_sim as srs
 from scipy.io import wavfile
@@ -58,9 +59,9 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
 
     audio_index = 0
     data_index = 0
-    for i, src_pos in enumerate(points):
-        if len(points) % (i + 1) == 0:
-            print(f'{i / len(points)}% done')  # todo: tqdm etc.?
+    progress = tqdm.tqdm(enumerate(points))
+    for i, src_pos in progress:
+        progress.set_description(f'Calculating RIRs for each other point: {i + 1}/{len(points)}')
         for j, recv_pos in enumerate(points):
             if j == i:
                 continue  # skip if source and listener are at the same point
@@ -73,16 +74,10 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
             limits = np.minimum(rt60, maxlim)
             abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
-            
-            # In this case all the information (e.g. SH directivities) are already
-            # encoded in the echograms, hence they are rendered directly to discrete RIRs
             sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
             if order == 0:
                 sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
             sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
-            #plt.figure()
-            #plt.plot(sh_rirs)
-            #plt.show()
             audio_length = len(audio_anechoic)
 
             reverberant_signal = np.zeros((audio_length, components))
