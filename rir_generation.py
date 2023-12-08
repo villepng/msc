@@ -12,6 +12,9 @@ from scipy.io import wavfile
 from scipy.signal import fftconvolve
 
 
+RIRS = {}
+
+
 def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
     """ Create a grid of (x, y) coordinates with specified amount of points (x_points * y_points)
 
@@ -70,16 +73,21 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
-        
-            maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
-            limits = np.minimum(rt60, maxlim)
-            abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
-            sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
-            if order == 0:
-                sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
-            sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
-            audio_length = len(audio_anechoic)
 
+            if f'{i}-{j}' in RIRS:
+                sh_rirs = RIRS[f'{i}-{j}']
+            else:
+                maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
+                limits = np.minimum(rt60, maxlim)
+                abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
+                sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
+                if order == 0:
+                    sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
+                sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
+                RIRS.update({f'{i}-{j}': sh_rirs})
+
+
+            audio_length = len(audio_anechoic)
             reverberant_signal = np.zeros((audio_length, components))
             pathlib.Path(f'{save_path}/subject{data_index + 1}').mkdir(parents=True)
             wavfile.write(f'{save_path}/subject{data_index + 1}/mono.wav', fs, audio_anechoic.astype(np.int16))
@@ -133,7 +141,7 @@ def parse_input_args():
     parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, \
                         will be saved in a folder named based on the ambisonics order')
     parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))  # 20 cm min distance between points
-    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: change to 100 later?
+    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
