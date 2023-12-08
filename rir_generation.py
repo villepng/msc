@@ -51,23 +51,22 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     rt60 = np.array([rt60])
     components = (order + 1) ** 2
     nBands = len(rt60)
-    # todo: check the variables below
     band_centerfreqs = np.empty(nBands)
     band_centerfreqs[0] = 1000
     # Absorption for approximately achieving the RT60 above - row per band
-    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions
-    # Critical distance for the room (where reverberation = direct sound, check and warn if src->lstn is bigger?)
-    _, d_critical, _ = srs.room_stats(room, abs_wall)
+    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions for more realistic rirs
 
     audio_index = 0
     data_index = 0
     for i, src_pos in enumerate(points):
+        if len(points) % (i + 1) == 0:
+            print(f'{i / len(points)}% done')  # todo: tqdm etc.?
         for j, recv_pos in enumerate(points):
             if j == i:
                 continue  # skip if source and listener are at the same point
 
             fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
-            audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))
+            audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
         
@@ -138,7 +137,7 @@ def parse_input_args():
     parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal" (?)
     parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, \
                         will be saved in a folder named based on the ambisonics order')
-    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))
+    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))  # 20 cm min distance between points
     parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: change to 100 later?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
@@ -187,11 +186,12 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 # todo: fix type hints and function documentations
 def main():
     args = parse_input_args()
+    print(f'Generating SH RIR audio dataset with {args.grid[0]}x{args.grid[1]} grid points and SH order {args.order}')  # todo: update
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
-    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}'  # include grid size in the name?
+    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}_{args.grid[0]}x{args.grid[1]}'
     if pathlib.Path(save_path).is_dir():
         answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')
         if answer.lower() in ['y', 'yes']:
@@ -201,6 +201,7 @@ def main():
     else:
         rm_tree(pathlib.Path(save_path))  # clear old files
 
+    # todo: save and utilise generated rirs, generate testset differently (smaller, different points?)
     # train data in save path under trainset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
     generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order)
