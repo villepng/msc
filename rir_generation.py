@@ -62,9 +62,9 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
 
     audio_index = 0
     data_index = 0
-    progress = tqdm.tqdm(enumerate(points))
+    progress = tqdm.tqdm(enumerate(points))  # todo: pathlib seems to not work well with eta, possible fixes?
     for i, src_pos in progress:
-        progress.set_description(f'Calculating RIRs for each other point: {i + 1}/{len(points)}')
+        progress.set_description(f'Calculating RIRs for each other point at grid point: {i + 1}/{len(points)}')
         for j, recv_pos in enumerate(points):
             if j == i:
                 continue  # skip if source and listener are at the same point
@@ -88,19 +88,21 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                 sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
                 RIRS.update({f'{i}-{j}': sh_rirs})
 
-
+            subject = data_index + 1
             audio_length = len(audio_anechoic)
             reverberant_signal = np.zeros((audio_length, components))
-            pathlib.Path(f'{save_path}/subject{data_index + 1}').mkdir(parents=True)
-            wavfile.write(f'{save_path}/subject{data_index + 1}/mono.wav', fs, audio_anechoic.astype(np.int16))
+            pathlib.Path(f'{save_path}/subject{subject}').mkdir(parents=True)
+            wavfile.write(f'{save_path}/subject{subject}/mono.wav', fs, audio_anechoic.astype(np.int16))
             for k in range(components):
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
                 if rm_delay:
-                    reverberant_signal[:delay_samples, k] = 0  # todo: save information
-            wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
+                    reverberant_signal[:delay_samples, k] = 0
+                    with open(f'{save_path}/subject{subject}/delays.txt', 'a') as delay_f:
+                        delay_f.write(f'{delay_samples}\n')
+            wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
 
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
-                             fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}/')
+                             fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}')
 
             audio_index += 1
             data_index += 1
@@ -145,7 +147,7 @@ def parse_input_args():
     parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, \
                         will be saved in a folder named based on the ambisonics order')
     parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))  # 20 cm min distance between points
-    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))
+    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: give delta instead of points?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
@@ -182,8 +184,8 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     :return: none
     """
     points = int(audio_length / fs * (fs/400))
-    source_file = open(f'{path}tx_positions.txt', 'a')
-    listener_file = open(f'{path}rx_positions.txt', 'a')
+    source_file = open(f'{path}/tx_positions.txt', 'a')
+    listener_file = open(f'{path}/rx_positions.txt', 'a')
     for i in range(points):
         source_file.write(f'{source[0]} {source[1]} {source[2]}\n')  # add quaternions later, e.g., 1.0 0.0 0.0 0.0
         listener_file.write(f'{listener[0]} {listener[1]} {listener[2]}\n')
@@ -194,7 +196,7 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 # todo: fix type hints and function documentations
 def main():
     args = parse_input_args()
-    print(f'Generating SH RIR audio dataset with {args.grid[0]}x{args.grid[1]} grid points and SH order {args.order}')  # todo: update
+    print(f'Generating SH RIR audio dataset in a room of size {args.room[0]}m*{args.room[1]}m*{args.room[2]}m with {args.grid[0]}x{args.grid[1]} grid points and SH order {args.order}')  # todo: update
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
     parent_dir = str(pathlib.Path.cwd().parent)
