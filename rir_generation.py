@@ -100,7 +100,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             for k in range(components):
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
                 if rm_delay:
-                    reverberant_signal[:delay_samples, k] = 0
+                    reverberant_signal[:, k] = np.roll(reverberant_signal[:, k], -delay_samples)
                     with open(f'{save_path}/subject{subject}/delays.txt', 'a') as delay_f:
                         delay_f.write(f'{delay_samples}\n')
             wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
