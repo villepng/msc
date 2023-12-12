@@ -11,6 +11,7 @@ from scipy.io import wavfile
 from scipy.signal import fftconvolve
 
 
+# Extra variables
 RIRS = {}
 SOUND_V = 343
 
@@ -69,7 +70,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     nBands = len(rt60)
     band_centerfreqs = np.empty(nBands)
     band_centerfreqs[0] = 1000
-    # Absorption for approximately achieving the RT60 above - row per band
     abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions for more realistic rirs
 
     audio_index = 0
@@ -89,7 +89,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             if rm_delay:
                 delay_samples = int( ((src_pos[0] - recv_pos[0]) ** 2 + (src_pos[1] - recv_pos[1]) ** 2 + (heights[0] - heights[1]) ** 2) ** (1/2) / SOUND_V * fs )
 
-            # Generate SH RIRs
+            # Generate/load SH RIRs
             if f'{i}-{j}' in RIRS:
                 sh_rirs = RIRS[f'{i}-{j}']
             else:
@@ -166,7 +166,7 @@ def parse_input_args():
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
     parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
-    parser.add_argument('--skip_rir_write', action='store_true', help='by default RIRs are saved according to their parameters under save_path')  # todo: check room stat match?
+    parser.add_argument('--skip_rir_write', action='store_true', help='by default RIRs are saved according to their parameters under save_path')
     return parser.parse_args()
 
 
