@@ -166,7 +166,7 @@ def parse_input_args():
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
     parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
-    parser.add_argument('--load_rirs', action='store_true', help='calculated RIRs are always saved, with this they can be loaded if using the same room parameters from before')  # todo: check room stat match?
+    parser.add_argument('--skip_rir_write', action='store_true', help='by default RIRs are saved according to their parameters under save_path')  # todo: check room stat match?
     return parser.parse_args()
 
 
@@ -209,37 +209,43 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 
 # todo: fix type hints and function documentations
 def main():
+    # Load arguments and create grid
     global RIRS
     args = parse_input_args()
     print(f'Generating SH RIR audio dataset in a room of size {args.room[0]}m*{args.room[1]}m*{args.room[2]}m with {args.grid[0]}x{args.grid[1]} grid and SH order {args.order}')
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
+    # Get dataset and save paths, load existing RIRs if possible
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
     save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}_{args.grid[0]}x{args.grid[1]}'
+    rir_path = f'{parent_dir}/{args.save_path}/rirs/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
     if pathlib.Path(save_path).is_dir():
         answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')
         if answer.lower() in ['y', 'yes']:
-            if args.load_rirs:
-                with open(f'{save_path}/RIRs/rirs.pickle', 'rb') as f:
+            try:
+                with open(f'{rir_path}/rirs.pickle', 'rb') as f:
+                    print('Loading existing RIR data')
                     RIRS = pickle.load(f)
+            except FileNotFoundError:
+                print('No existing RIRs with current parameters found')
             rm_tree(pathlib.Path(save_path))
         else:
             sys.exit()
 
-    # todo: save generated rirs in a file? (arg option), generate testset differently (smaller, different points?)
-    # train data in save path under trainset folder
+    # Create dataset divided into trainset and testset
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
     generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, args=args)
-    # test data in save path under testset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
-    # grid = create_grid(np.array([8, 4]), args.wall_gap, np.array(args.room))
+    # grid = create_grid(np.array([8, 4]), args.wall_gap, np.array(args.room))  # todo: generate testset differently (smaller, different points?)
     generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, args=args)
     
-    if True:  # tmp RIR saving, todo: save in a completely different place with all parameters?
-        pathlib.Path(f'{save_path}/RIRs').mkdir(parents=True)
-        with open(f'{save_path}/RIRs/rirs.pickle', 'ab') as f:
-            pickle.dump(RIRS, f)
+    # Save calculated RIRs
+    if not args.skip_rir_write:  # might technically need even more specific file names
+        if not pathlib.Path(rir_path).exists():
+            pathlib.Path(rir_path).mkdir(parents=True)
+            with open(f'{rir_path}/rirs.pickle', 'wb') as f:
+                pickle.dump(RIRS, f)
 
 
 if __name__ == '__main__':
