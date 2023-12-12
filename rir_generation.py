@@ -31,11 +31,12 @@ def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.arr
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-# todo: pass args instead?
-def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array, 
-                          room: np.array, rt60: float, order: int, rm_delay: bool, test_set: bool = False) -> None:
+def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = None, 
+                          room: np.array = None, rt60: float = None, order: int = None, rm_delay: bool = None, 
+                          args: argparse.Namespace = None, test_set: bool = False) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
-    for each point in the grid RIR applied audio at every other point is generated
+    for each point in the grid RIR applied audio at every other point is generated.
+    RIR parameters can be given in args or separately
     Coordinate system (Z direction is 'up' from the screen, i.e. the height):
     ^
     |
@@ -55,6 +56,14 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     :return: None
 
     """
+    global RIRS
+    if args is not None:  # could have checks that other parameters are given if not using args?
+        heights = np.array(args.heights)
+        room = np.array(args.room)
+        rt60 = args.rt60
+        order = args.order
+        rm_delay = args.rm_delay
+
     rt60 = np.array([rt60])
     components = (order + 1) ** 2
     nBands = len(rt60)
@@ -157,7 +166,7 @@ def parse_input_args():
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
     parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
-    parser.add_argument('--rir_paths', help='path to rir files to be used')  # currently works with pickle, todo: checks for matching room sizes etc.?
+    parser.add_argument('--load_rirs', action='store_true', help='calculated RIRs are always saved, with this they can be loaded if using the same room parameters from before')  # todo: check room stat match?
     return parser.parse_args()
 
 
@@ -200,8 +209,9 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 
 # todo: fix type hints and function documentations
 def main():
+    global RIRS
     args = parse_input_args()
-    print(f'Generating SH RIR audio dataset in a room of size {args.room[0]}m*{args.room[1]}m*{args.room[2]}m with {args.grid[0]}x{args.grid[1]} grid points and SH order {args.order}')
+    print(f'Generating SH RIR audio dataset in a room of size {args.room[0]}m*{args.room[1]}m*{args.room[2]}m with {args.grid[0]}x{args.grid[1]} grid and SH order {args.order}')
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
     parent_dir = str(pathlib.Path.cwd().parent)
@@ -210,6 +220,9 @@ def main():
     if pathlib.Path(save_path).is_dir():
         answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')
         if answer.lower() in ['y', 'yes']:
+            if args.load_rirs:
+                with open(f'{save_path}/RIRs/rirs.pickle', 'rb') as f:
+                    RIRS = pickle.load(f)
             rm_tree(pathlib.Path(save_path))
         else:
             sys.exit()
@@ -217,20 +230,16 @@ def main():
     # todo: save generated rirs in a file? (arg option), generate testset differently (smaller, different points?)
     # train data in save path under trainset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, np.array(args.heights),
-                          np.array(args.room), args.rt60, args.order, args.rm_delay)
+    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, args=args)
     # test data in save path under testset folder
     audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
     # grid = create_grid(np.array([8, 4]), args.wall_gap, np.array(args.room))
-    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, np.array(args.heights),
-                          np.array(args.room), args.rt60, args.order, args.rm_delay)
+    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, args=args)
     
-    if True:  # tmp RIR saving
+    if True:  # tmp RIR saving, todo: save in a completely different place with all parameters?
         pathlib.Path(f'{save_path}/RIRs').mkdir(parents=True)
         with open(f'{save_path}/RIRs/rirs.pickle', 'ab') as f:
             pickle.dump(RIRS, f)
-        #with open(f'{save_path}/RIRs/rirs.pickle', 'rb') as f:
-        #    k = pickle.load(f)
 
 
 if __name__ == '__main__':
