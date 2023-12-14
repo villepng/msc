@@ -4,15 +4,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 
-from scipy.fft import fft, ifft
+from numpy.fft import fft, ifft
 from scipy.io import wavfile
-from scipy.signal import deconvolve
 
 
 # todo: ambisonic orders
 def compare_rirs(rirs, gt_path, estimate_path, comparisons):
     subjects = len(glob.glob(f'{gt_path}/*'))
     comparisons = min(comparisons, subjects)
+
     for i, rir in enumerate(rirs.values()):
         if i + 1 > comparisons:
             break  # todo: make whole loop less stupid
@@ -28,23 +28,21 @@ def compare_rirs(rirs, gt_path, estimate_path, comparisons):
         # axs[2].set_title('estimate')
         # plt.show()
 
-        # N = int(2 ** (np.ceil(np.log2(len(reverb) + len(mono)))))
-        test2 = ifft(fft(reverb) / fft(mono))
+        gt_f_rir = ifft(fft(reverb) / fft(mono))
         estimate_rir_normal = ifft(fft(estimate) / fft(mono))
         estimate_rir_cut = ifft(fft(estimate[2000:len(estimate)]) / fft(mono[2000:len(mono)]))
-        test, _ = deconvolve(reverb, rir.squeeze())
 
         fig, axs = plt.subplots(4)
         axs[0].plot(rir)
         axs[0].set_title('Ground-truth RIR')
-        axs[1].plot(test2[:len(rir)].real)
+        axs[1].plot(gt_f_rir[:len(rir)].real)
         axs[1].set_title('RIR calculated from ground-truth audio')
         axs[2].plot(estimate_rir_normal[:len(rir)].real)
         axs[2].set_title('Estimated RIR (full signal)')
         axs[3].plot(estimate_rir_cut[:len(rir)].real)
         axs[3].set_title('Estimated RIR (error at start cut)')
         plt.show()
-        # print(np.sum(rir - estimate_rir) ** 1)
+        # print(np.sum(rir - estimate_rir) ** 2)
 
 
 def parse_input_args():
