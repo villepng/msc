@@ -71,6 +71,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     band_centerfreqs = np.empty(nBands)
     band_centerfreqs[0] = 1000
     abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions for more realistic rirs
+    # https://www.acoustic-supplies.com/absorption-coefficient-chart/ 6 x 6 bands
 
     audio_index = 0
     data_index = 0
