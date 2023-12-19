@@ -14,6 +14,15 @@ from scipy.signal import fftconvolve
 # Extra variables
 RIRS = {}
 SOUND_V = 343
+MATERIALS = {
+    'carpet': [0.01, 0.02, 0.06, 0.15, 0.25, 0.45],  # Frequency bands; 125, 250, 500, 1k, 2k, 4k
+    'glass': [0.04, 0.04, 0.03, 0.03, 0.02, 0.02],
+    'drapery': [0.14, 0.35, 0.53, 0.75, 0.7, 0.6],
+    'doors': [0.1, 0.07, 0.05, 0.04, 0.04, 0.04],
+    'concrete': [0.1, 0.05, 0.06, 0.07, 0.09, 0.08],
+    'plaster': [0.14, 0.1, 0.06, 0.05, 0.04, 0.04]
+    }
+
 
 
 def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
@@ -57,7 +66,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     :return: None
 
     """
-    global RIRS
+    global RIRS, SOUND_V, MATERIALS
     if args is not None:  # could have checks that other parameters are given if not using args?
         heights = np.array(args.heights)
         room = np.array(args.room)
@@ -67,11 +76,11 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
 
     rt60 = np.array([rt60])
     components = (order + 1) ** 2
-    nBands = len(rt60)
-    band_centerfreqs = np.empty(nBands)
-    band_centerfreqs[0] = 1000
-    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions for more realistic rirs
-    # https://www.acoustic-supplies.com/absorption-coefficient-chart/ 6 x 6 bands
+    nBands = 6
+    band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
+    # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # basic absorption
+    abs_wall = np.array([MATERIALS['doors'], MATERIALS['glass'], MATERIALS['concrete'], 
+                         MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
 
     audio_index = 0
     data_index = 0
@@ -95,7 +104,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                 sh_rirs = RIRS[f'{i}-{j}']
             else:
                 maxlim = 1.5  # just stop if the echogram goes beyond that time (or just set it to max(rt60))
-                limits = np.minimum(rt60, maxlim)
+                limits = np.empty(nBands)
+                limits.fill(np.minimum(rt60[0], maxlim))
                 abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
                 sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
                 if order == 0:
