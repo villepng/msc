@@ -14,13 +14,14 @@ from scipy.signal import fftconvolve
 # Extra variables
 RIRS = {}
 SOUND_V = 343
+# Could even utilize pyroomacoustics database for this?
 MATERIALS = {
-    'carpet': [0.01, 0.02, 0.06, 0.15, 0.25, 0.45],  # Frequency bands; 125, 250, 500, 1k, 2k, 4k
-    'glass': [0.04, 0.04, 0.03, 0.03, 0.02, 0.02],
+    'carpet': [0.08, 0.08, 0.3, 0.6, 0.75, 0.8],  # Frequency bands; 125, 250, 500, 1k, 2k, 4k
+    'doors': [0.14, 0.1, 0.06, 0.08, 0.1, 0.1],
     'drapery': [0.14, 0.35, 0.53, 0.75, 0.7, 0.6],
-    'doors': [0.1, 0.07, 0.05, 0.04, 0.04, 0.04],
-    'concrete': [0.1, 0.05, 0.06, 0.07, 0.09, 0.08],
-    'plaster': [0.14, 0.1, 0.06, 0.05, 0.04, 0.04]
+    'fiberglass': [0.18, 0.76, 0.99, 0.99, 0.99, 0.99],
+    'glass': [0.04, 0.04, 0.03, 0.03, 0.02, 0.02],
+    'plaster': [0.2, 0.15, 0.1, 0.08, 0.04, 0.02]
     }
 
 
@@ -78,9 +79,11 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     components = (order + 1) ** 2
     nBands = 6
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
-    # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # basic absorption
-    abs_wall = np.array([MATERIALS['doors'], MATERIALS['glass'], MATERIALS['concrete'], 
+    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)  # basic absorption
+    abs_wall = np.array([MATERIALS['doors'], MATERIALS['glass'], MATERIALS['fiberglass'], 
                          MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
+    
+    tmp = srs.room_stats(room, abs_wall)
 
     audio_index = 0
     data_index = 0
