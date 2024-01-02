@@ -181,6 +181,7 @@ def parse_input_args():
     parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
     parser.add_argument('--skip_rir_write', action='store_true', help='by default RIRs are saved according to their parameters under save_path')
     parser.add_argument('--skip_coord_write', action='store_true', help='by default indexes for each coordinate are stored as metadata under save_path')
+    parser.add_argument('--skip_split_write', action='store_true', help='allows to skip train/test split info writing that is used with NAFs')
     return parser.parse_args()
 
 
@@ -228,12 +229,33 @@ def write_coordinate_metadata(grid: np.array, save_path: str) -> None:  # todo: 
     :param save_path: path to save the text file
     :return:
     """
-    points = grid.shape[0]
     if not pathlib.Path(save_path).exists():  # todo: extra logic if exists
         pathlib.Path(save_path).mkdir(parents=True)
     with open(f'{save_path}/points.txt', 'a+') as f:
         for i, point in enumerate(grid):
             f.write(f'{i} {point[0]} {point[1]} 1.5\n')
+
+
+def write_split_metadata(grid: np.array, save_path: str) -> None:  # todo: include heights
+    """ Create and store train/test split for point pairs that can be used as metadata for NAFs
+
+    :param grid: x-y coordinate grid
+    :param save_path: path to save the pickle file
+    :return:
+    """
+    points = grid.shape[0]
+    data = []
+    for i in range(points):
+        for j in range(points):
+            if i == j:
+                continue
+            data.append(f'{i}_{j}')
+    np.random.shuffle(data)
+    pairs = points * (points - 1)
+    train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
+    split = [{0: data[:train]}, {0: data[train:train+test]}]
+    with open(f'{save_path}/test_1_complete.pkl', 'wb') as f:
+        pickle.dump(split, f)
 
 
 def main():
@@ -248,6 +270,8 @@ def main():
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
     save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}_{args.grid[0]}x{args.grid[1]}'
     rir_path = f'{parent_dir}/{args.save_path}/rirs/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
+    metadata_path = f'{parent_dir}/{args.save_path}/metadata/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}'
+
     if pathlib.Path(save_path).is_dir():
         answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')  # todo: check rir file before this
         if answer.lower() in ['y', 'yes']:
@@ -260,9 +284,12 @@ def main():
             rm_tree(pathlib.Path(save_path))
         else:
             sys.exit()
+
     # Store extra metadata
     if not args.skip_coord_write:
-        write_coordinate_metadata(grid, f'{parent_dir}/{args.save_path}/metadata/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}')
+        write_coordinate_metadata(grid, metadata_path)
+    if not args.skip_split_write:
+        write_split_metadata(grid, metadata_path)
 
     # Create dataset divided into trainset and testset
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
