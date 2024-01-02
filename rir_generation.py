@@ -25,7 +25,6 @@ MATERIALS = {
     }
 
 
-
 def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
     """ Create a grid of (x, y) coordinates with specified amount of points (x_points * y_points)
 
@@ -80,7 +79,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     nBands = 6
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)  # basic absorption
-    abs_wall = np.array([MATERIALS['doors'], MATERIALS['glass'], MATERIALS['fiberglass'], 
+    abs_wall = np.array([MATERIALS['doors'], MATERIALS['glass'], MATERIALS['fiberglass'],
                          MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
     
     tmp = srs.room_stats(room, abs_wall)
@@ -181,6 +180,7 @@ def parse_input_args():
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
     parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
     parser.add_argument('--skip_rir_write', action='store_true', help='by default RIRs are saved according to their parameters under save_path')
+    parser.add_argument('--skip_coord_write', action='store_true', help='by default indexes for each coordinate are stored as metadata under save_path')
     return parser.parse_args()
 
 
@@ -221,7 +221,21 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     listener_file.close()
 
 
-# todo: fix type hints and function documentations
+def write_coordinate_metadata(grid: np.array, save_path: str) -> None:  # todo: include heights
+    """ Save the index and coordinates for each unique point in the grid as metadate, 0 1.0, 1.0, 1.5 etc.
+
+    :param grid: x-y coordinate grid
+    :param save_path: path to save the text file
+    :return:
+    """
+    points = grid.shape[0]
+    if not pathlib.Path(save_path).exists():  # todo: extra logic if exists
+        pathlib.Path(save_path).mkdir(parents=True)
+    with open(f'{save_path}/points.txt', 'a+') as f:
+        for i, point in enumerate(grid):
+            f.write(f'{i} {point[0]} {point[1]} 1.5\n')
+
+
 def main():
     # Load arguments and create grid
     global RIRS
@@ -235,7 +249,7 @@ def main():
     save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}_{args.grid[0]}x{args.grid[1]}'
     rir_path = f'{parent_dir}/{args.save_path}/rirs/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
     if pathlib.Path(save_path).is_dir():
-        answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')
+        answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')  # todo: check rir file before this
         if answer.lower() in ['y', 'yes']:
             try:
                 with open(f'{rir_path}/rirs.pickle', 'rb') as f:
@@ -246,6 +260,9 @@ def main():
             rm_tree(pathlib.Path(save_path))
         else:
             sys.exit()
+    # Store extra metadata
+    if not args.skip_coord_write:
+        write_coordinate_metadata(grid, f'{parent_dir}/{args.save_path}/metadata/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}')
 
     # Create dataset divided into trainset and testset
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
