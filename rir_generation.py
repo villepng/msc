@@ -222,18 +222,22 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     listener_file.close()
 
 
-def write_coordinate_metadata(grid: np.array, save_path: str) -> None:  # todo: include heights
-    """ Save the index and coordinates for each unique point in the grid as metadate, 0 1.0, 1.0, 1.5 etc.
+def write_coordinate_metadata(grid: np.array, room: list, save_path: str) -> None:  # todo: include heights
+    """ Save the index and coordinates for each unique point in the grid as metadate, 0 1.0, 1.0, 1.5 etc.,
+    as well as min/max coordinates in the room
 
     :param grid: x-y coordinate grid
+    :param room: room size
     :param save_path: path to save the text file
     :return:
     """
-    if not pathlib.Path(save_path).exists():  # todo: extra logic if exists
+    if not pathlib.Path(save_path).exists():  # todo: extra logic if exists, move to main
         pathlib.Path(save_path).mkdir(parents=True)
     with open(f'{save_path}/points.txt', 'a+') as f:
         for i, point in enumerate(grid):
             f.write(f'{i} {point[0]} {point[1]} 1.5\n')
+    with open(f'{save_path}/minmax.pkl', 'wb') as f:
+        pickle.dump(([0.0, 0.0, 0.0], room), f)
 
 
 def write_split_metadata(grid: np.array, save_path: str) -> None:  # todo: include heights
@@ -272,22 +276,22 @@ def main():
     rir_path = f'{parent_dir}/{args.save_path}/rirs/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
     metadata_path = f'{parent_dir}/{args.save_path}/metadata/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}'
 
-    if pathlib.Path(save_path).is_dir():
-        answer = input(f'Delete all sub-folders/files in \'{save_path}\' (y/n)? ')  # todo: check rir file before this
+    if pathlib.Path(f'{rir_path}/rirs.pickle').is_file():
+        answer = input(f'Existing RIR file found at \'{rir_path}\', use stored RIRs for faster generation (y/n)? ')
         if answer.lower() in ['y', 'yes']:
-            try:
-                with open(f'{rir_path}/rirs.pickle', 'rb') as f:
-                    print('Loading existing RIR data')
-                    RIRS = pickle.load(f)
-            except FileNotFoundError:
-                print('No existing RIRs with current parameters found')
+            with open(f'{rir_path}/rirs.pickle', 'rb') as f:
+                RIRS = pickle.load(f)
+                print('Loaded existing RIR data')
+    if pathlib.Path(save_path).is_dir():
+        answer = input(f'Existing files found, all sub-folders/files in \'{save_path}\' will be deleted (ok/quit) ')
+        if answer.lower() in ['o', 'ok', 'y']:
             rm_tree(pathlib.Path(save_path))
         else:
             sys.exit()
 
     # Store extra metadata
     if not args.skip_coord_write:
-        write_coordinate_metadata(grid, metadata_path)
+        write_coordinate_metadata(grid, args.room, metadata_path)
     if not args.skip_split_write:
         write_split_metadata(grid, metadata_path)
 
