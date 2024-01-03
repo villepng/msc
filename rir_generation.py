@@ -231,8 +231,10 @@ def write_coordinate_metadata(grid: np.array, room: list, save_path: str) -> Non
     :param save_path: path to save the text file
     :return:
     """
-    if not pathlib.Path(save_path).exists():  # todo: extra logic if exists, move to main
+    if not pathlib.Path(save_path).exists():
         pathlib.Path(save_path).mkdir(parents=True)
+    if pathlib.Path(f'{save_path}/points.txt').is_file():
+        pathlib.Path(f'{save_path}/points.txt').unlink()
     with open(f'{save_path}/points.txt', 'a+') as f:
         for i, point in enumerate(grid):
             f.write(f'{i} {point[0]} {point[1]} 1.5\n')
@@ -284,8 +286,9 @@ def main():
                 print('Loaded existing RIR data')
     if pathlib.Path(save_path).is_dir():
         answer = input(f'Existing files found, all sub-folders/files in \'{save_path}\' will be deleted (ok/quit) ')
-        if answer.lower() in ['o', 'ok', 'y']:
+        if answer.lower() in ['o', 'ok', 'y', 'yes']:
             rm_tree(pathlib.Path(save_path))
+            print('Old data cleared')
         else:
             sys.exit()
 
