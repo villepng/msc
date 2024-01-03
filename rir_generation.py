@@ -239,7 +239,7 @@ def write_coordinate_metadata(grid: np.array, room: list, save_path: str) -> Non
         for i, point in enumerate(grid):
             f.write(f'{i} {point[0]} {point[1]} 1.5\n')
     with open(f'{save_path}/minmax.pkl', 'wb') as f:
-        pickle.dump(([0.0, 0.0, 0.0], room), f)
+        pickle.dump((np.array([0.0, 0.0, 0.0]), np.array(room)), f)
 
 
 def write_split_metadata(grid: np.array, save_path: str) -> None:  # todo: include heights
