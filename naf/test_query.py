@@ -151,7 +151,7 @@ def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_p
 
 
 def main():
-    weights = torch.load(weight_path_out, map_location='cuda:0')  # chkpt file
+    weights = torch.load('out/00200_mono.chkpt', map_location='cuda:0')  # chkpt file
     min_pos = np.array([0, 0])
     max_pos = np.array([10, 6])
     apt = "test_1"
@@ -192,7 +192,7 @@ def main():
         output = auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
     # mean = torch.from_numpy(mean_std[0]).float()[None]
     # std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
-    output = (output.reshape(1, 2, 256, max_lengths[apt]).cpu() * std[None] + mean[None]).numpy()
+    output = (output.reshape(1, 2, 256, max_lengths[apt]).cpu()).numpy()  # todo: add these somehow * std[None] + mean[None]
     print("Completed inference")
 
     fig, axarr = plt.subplots(1, 2)
