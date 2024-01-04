@@ -48,8 +48,10 @@ def main():
     parent_dir = str(pathlib.Path.cwd().parent)
     save_path = f'{parent_dir}/{args.save_path}/order_{order}'
 
-    data_path_obj = pathlib.Path(f'{parent_dir}/{args.data_path}/rir_ambisonics_order_{order}/testset')
+    # data_path_obj = pathlib.Path(f'{parent_dir}/{args.data_path}/testset')
+    data_path_obj = pathlib.Path(f'{parent_dir}/{args.data_path}')
     subjects = len([p for p in data_path_obj.iterdir() if p.is_dir()])
+    subjects = 100
 
     rm_tree(pathlib.Path(save_path))  # clear old files
     pathlib.Path(save_path).mkdir(parents=True)
@@ -57,7 +59,8 @@ def main():
     hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/{args.hrir}', order)
     for i in range(1, subjects + 1):  # subject indexing starts from 1 due to how the ML method is set up
         audio_data_path = f'{str(data_path_obj)}/subject{i}'
-        fs, ambisonic = wavfile.read(f'{audio_data_path}/ambisonic.wav')
+        # fs, ambisonic = wavfile.read(f'{audio_data_path}/ambisonic.wav')
+        fs, ambisonic = wavfile.read(f'{audio_data_path}.wav')
         binaural = spa.decoder.sh2bin(ambisonic.T, hrir)
         wavfile.write(f'{save_path}/binaural_{i}.wav', fs, binaural.astype(np.int16).T)  # todo: create and name folder
 
