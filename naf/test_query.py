@@ -6,6 +6,11 @@ import torch
 from torch import nn
 
 
+"""
+    Code from https://github.com/aluo-x/Learning_Neural_Acoustic_Fields
+"""
+
+
 class embedding_module_log(nn.Module):
     def __init__(self, funcs=[torch.sin, torch.cos], num_freqs=20, max_freq=10, ch_dim=1, include_in=True):
         super().__init__()
@@ -133,17 +138,24 @@ def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_p
     degree = orientation_idx
 
     non_norm_start = np.array(reciever_pos)
+    non_norm_end = np.array(source_pos)
+    total_non_norm_position = torch.cat((torch.from_numpy(non_norm_start)[None], torch.from_numpy(non_norm_end)[None]), dim=1).float()
+
+    start_position = (torch.from_numpy((non_norm_start - min_bbox_pos) / (max_bbox_pos - min_bbox_pos))[None] - 0.5) * 2.0
+    start_position = torch.clamp(start_position, min=-1.0, max=1.0)
+    end_position = (torch.from_numpy((non_norm_end - min_bbox_pos) / (max_bbox_pos - min_bbox_pos))[None] - 0.5) * 2.0
+    end_position = torch.clamp(end_position, min=-1.0, max=1.0)
+    total_position = torch.cat((start_position, end_position), dim=1).float()
+
+    return degree, total_position, total_non_norm_position, 2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0, 2.0*torch.from_numpy(selected_time).float()/float(max_len-1)-1.0
 
 
 def main():
-    weights = torch.load(weight_path_out, map_location='cuda:0')
-    min_maxes = load_pkl(minmax_path_out)
-    print("Bounding box of the room: ", min_maxes)
-    min_pos = min_maxes[0][[0, 2]]
-    max_pos = min_maxes[1][[0, 2]]
-    max_lengths = {"apartment_1": 101, "apartment_2": 86, "frl_apartment_2": 107, "frl_apartment_4": 103,
-                   "office_4": 78, "room_2": 84}
-    # The maximum length of an impulse response, derived from data
+    weights = torch.load(weight_path_out, map_location='cuda:0')  # chkpt file
+    min_pos = np.array([0, 0])
+    max_pos = np.array([10, 6])
+    apt = "test_1"
+    max_lengths = {"test_1": 37}
     output_device = 0
     num_freqs = 10
 
@@ -156,9 +168,9 @@ def main():
     loaded = auditory_net.load_state_dict(weights["network"])
     loaded = auditory_net.to("cuda:0")
 
-    emitter_position = rand_pt_2
-    listener_position = rand_pt
-    orientation = 0  # can be of 0, 1, 2, 3. Corresponds to 0, 90, 180, 270 degrees rotation for the listener
+    emitter_position = np.array([1.0, 1.0, 1.5])  # set manually for now
+    listener_position = np.array([9.0, 5.0, 1.5])
+    orientation = 0
 
     transformed_input = prepare_input(0, listener_position, emitter_position, max_lengths[apt], min_pos, max_pos)
 
@@ -178,6 +190,8 @@ def main():
     auditory_net.eval()
     with torch.no_grad():
         output = auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
+    # mean = torch.from_numpy(mean_std[0]).float()[None]
+    # std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
     output = (output.reshape(1, 2, 256, max_lengths[apt]).cpu() * std[None] + mean[None]).numpy()
     print("Completed inference")
 
@@ -187,6 +201,7 @@ def main():
     axarr[0].set_title('Channel 1')
     axarr[0].axis("off")
     # plt.subplot(1, 2, 2)
+    # todo: load actual if possible
     axarr[1].imshow(output[0, 1], cmap="inferno", vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
     axarr[1].set_title('Channel 2')
     axarr[1].axis("off")
