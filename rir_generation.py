@@ -1,12 +1,28 @@
 import argparse
 import csv
 import numpy as np
-import matplotlib.pyplot as plt
 import pathlib
+import pickle
+import sys
+import tqdm
 
 from masp import shoebox_room_sim as srs
 from scipy.io import wavfile
 from scipy.signal import fftconvolve
+
+
+# Extra variables
+RIRS = {}
+SOUND_V = 343
+# Could even utilize pyroomacoustics database for this?
+MATERIALS = {
+    'carpet': [0.08, 0.08, 0.3, 0.6, 0.75, 0.8],  # Frequency bands; 125, 250, 500, 1k, 2k, 4k
+    'doors': [0.14, 0.1, 0.06, 0.08, 0.1, 0.1],
+    'drapery': [0.14, 0.35, 0.53, 0.75, 0.7, 0.6],
+    'fiberglass': [0.18, 0.76, 0.99, 0.99, 0.99, 0.99],
+    'glass': [0.04, 0.04, 0.03, 0.03, 0.02, 0.02],
+    'plaster': [0.2, 0.15, 0.1, 0.08, 0.04, 0.02]
+    }
 
 
 def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
@@ -25,10 +41,12 @@ def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.arr
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array, 
-                          room: np.array, rt60: float, order: int) -> None:
+def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = None, 
+                          room: np.array = None, rt60: float = None, order: int = None, rm_delay: bool = None, 
+                          args: argparse.Namespace = None, test_set: bool = False) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
-    for each point in the grid RIR applied audio at every other point is generated
+    for each point in the grid RIR applied audio at every other point is generated.
+    RIR parameters can be given in args or separately
     Coordinate system (Z direction is 'up' from the screen, i.e. the height):
     ^
     |
@@ -43,55 +61,75 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     :param room: room size x*y*z, where z is height
     :param rt60: reverberation time
     :param order: ambisonics order used
+    :param rm_delay: true if sound travel time delay should be removed from generated audio
+    :param test_set: true if generating test set, in which case all grid point don't need to be used  # todo: functionality
     :return: None
 
     """
+    global RIRS, SOUND_V, MATERIALS
+    if args is not None:  # could have checks that other parameters are given if not using args?
+        heights = np.array(args.heights)
+        room = np.array(args.room)
+        rt60 = args.rt60
+        order = args.order
+        rm_delay = args.rm_delay
+
     rt60 = np.array([rt60])
     components = (order + 1) ** 2
-    nBands = len(rt60)
-    # todo: check the variables below
-    band_centerfreqs = np.empty(nBands)
-    band_centerfreqs[0] = 1000
-    # Absorption for approximately achieving the RT60 above - row per band
-    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # todo: update absorptions
-    # Critical distance for the room (where reverberation = direct sound, check and warn if src->lstn is bigger?)
-    _, d_critical, _ = srs.room_stats(room, abs_wall)
+    nBands = 6
+    band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
+    abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)  # basic absorption
+    abs_wall = np.array([MATERIALS['doors'], MATERIALS['glass'], MATERIALS['fiberglass'],
+                         MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
+    
+    tmp = srs.room_stats(room, abs_wall)
 
     audio_index = 0
     data_index = 0
-    for i, src_pos in enumerate(points):
+    progress = tqdm.tqdm(enumerate(points))  # todo: pathlib seems to not work well with eta, possible fixes?
+    for i, src_pos in progress:
+        progress.set_description(f'Calculating RIRs for each other point at grid point: {i + 1}/{len(points)}')
         for j, recv_pos in enumerate(points):
-            fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
             if j == i:
                 continue  # skip if source and listener are at the same point
 
+            # Load data
+            fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
+            audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
-        
-            maxlim = 1.5 # just stop if the echogram goes beyond that time (or just set it to max(rt60))
-            limits = np.minimum(rt60, maxlim)
-            abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
-            
-            # In this case all the information (e.g. SH directivities) are already
-            # encoded in the echograms, hence they are rendered directly to discrete RIRs
-            sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
-            if order == 0:
-                sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
-            sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
-            #plt.figure()
-            #plt.plot(sh_rirs)
-            #plt.show()
-            audio_length = len(audio_anechoic)
+            if rm_delay:
+                delay_samples = int( ((src_pos[0] - recv_pos[0]) ** 2 + (src_pos[1] - recv_pos[1]) ** 2 + (heights[0] - heights[1]) ** 2) ** (1/2) / SOUND_V * fs )
 
+            # Generate/load SH RIRs
+            if f'{i}-{j}' in RIRS:
+                sh_rirs = RIRS[f'{i}-{j}']
+            else:
+                maxlim = 1.5  # just stop if the echogram goes beyond that time (or just set it to max(rt60))
+                limits = np.empty(nBands)
+                limits.fill(np.minimum(rt60[0], maxlim))
+                abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
+                sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
+                if order == 0:
+                    sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
+                sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
+                RIRS.update({f'{i}-{j}': sh_rirs})
+
+            # Apply RIRs and save signals & metadata
+            subject = data_index + 1
+            audio_length = len(audio_anechoic)
             reverberant_signal = np.zeros((audio_length, components))
-            pathlib.Path(f'{save_path}/subject{data_index + 1}').mkdir(parents=True)
-            wavfile.write(f'{save_path}/subject{data_index + 1}/mono.wav', fs, audio_anechoic.astype(np.int16))
+            pathlib.Path(f'{save_path}/subject{subject}').mkdir(parents=True)
+            wavfile.write(f'{save_path}/subject{subject}/mono.wav', fs, audio_anechoic.astype(np.int16))
             for k in range(components):
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
-            wavfile.write(f'{save_path}/subject{data_index + 1}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
-
+                if rm_delay:
+                    reverberant_signal[:, k] = np.roll(reverberant_signal[:, k], -delay_samples)
+                    with open(f'{save_path}/subject{subject}/delays.txt', 'a') as delay_f:
+                        delay_f.write(f'{delay_samples}\n')
+            wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
-                             fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}/')
+                             fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}')
 
             audio_index += 1
             data_index += 1
@@ -133,14 +171,17 @@ def get_sn3d_norm_coefficients(order: int) -> list:
 def parse_input_args():
     parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics with specified order')
     parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal" (?)
-    parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, \
-                        will be saved in a folder named based on the ambisonics order')
-    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))
-    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: change to 100 later?
+    parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, will be saved in a folder named based on the ambisonics order')
+    parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))  # 20 cm min distance between points
+    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: give delta instead of points?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
     parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
+    parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
+    parser.add_argument('--skip_rir_write', action='store_true', help='by default RIRs are saved according to their parameters under save_path')
+    parser.add_argument('--skip_coord_write', action='store_true', help='by default indexes for each coordinate are stored as metadata under save_path')
+    parser.add_argument('--skip_split_write', action='store_true', help='allows to skip train/test split info writing that is used with NAFs')
     return parser.parse_args()
 
 
@@ -172,8 +213,8 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     :return: none
     """
     points = int(audio_length / fs * (fs/400))
-    source_file = open(f'{path}tx_positions.txt', 'a')
-    listener_file = open(f'{path}rx_positions.txt', 'a')
+    source_file = open(f'{path}/tx_positions.txt', 'a')
+    listener_file = open(f'{path}/rx_positions.txt', 'a')
     for i in range(points):
         source_file.write(f'{source[0]} {source[1]} {source[2]}\n')  # add quaternions later, e.g., 1.0 0.0 0.0 0.0
         listener_file.write(f'{listener[0]} {listener[1]} {listener[2]}\n')
@@ -181,23 +222,95 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     listener_file.close()
 
 
-# todo: fix type hints and function documentations
-def main():
-    args = parse_input_args()
+def write_coordinate_metadata(grid: np.array, room: list, save_path: str) -> None:  # todo: include heights
+    """ Save the index and coordinates for each unique point in the grid as metadate, 0 1.0, 1.0, 1.5 etc.,
+    as well as min/max coordinates in the room
 
+    :param grid: x-y coordinate grid
+    :param room: room size
+    :param save_path: path to save the text file
+    :return:
+    """
+    if not pathlib.Path(save_path).exists():
+        pathlib.Path(save_path).mkdir(parents=True)
+    if pathlib.Path(f'{save_path}/points.txt').is_file():
+        pathlib.Path(f'{save_path}/points.txt').unlink()
+    with open(f'{save_path}/points.txt', 'a+') as f:
+        for i, point in enumerate(grid):
+            f.write(f'{i} {point[0]} {point[1]} 1.5\n')
+    with open(f'{save_path}/minmax.pkl', 'wb') as f:
+        pickle.dump((np.array([0.0, 0.0, 0.0]), np.array(room)), f)
+
+
+def write_split_metadata(grid: np.array, save_path: str) -> None:  # todo: include heights
+    """ Create and store train/test split for point pairs that can be used as metadata for NAFs
+
+    :param grid: x-y coordinate grid
+    :param save_path: path to save the pickle file
+    :return:
+    """
+    points = grid.shape[0]
+    data = []
+    for i in range(points):
+        for j in range(points):
+            if i == j:
+                continue
+            data.append(f'{i}_{j}')
+    np.random.shuffle(data)
+    pairs = points * (points - 1)
+    train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
+    split = [{0: data[:train]}, {0: data[train:train+test]}]
+    with open(f'{save_path}/test_1_complete.pkl', 'wb') as f:
+        pickle.dump(split, f)
+
+
+def main():
+    # Load arguments and create grid
+    global RIRS
+    args = parse_input_args()
+    print(f'Generating SH RIR audio dataset in a room of size {args.room[0]}m*{args.room[1]}m*{args.room[2]}m with {args.grid[0]}x{args.grid[1]} grid and SH order {args.order}')
     grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
 
+    # Get dataset and save paths, load existing RIRs if possible
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
-    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}'  # include grid size in the name?
-    rm_tree(pathlib.Path(save_path))  # clear old files
+    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}_{args.grid[0]}x{args.grid[1]}'
+    rir_path = f'{parent_dir}/{args.save_path}/rirs/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
+    metadata_path = f'{parent_dir}/{args.save_path}/metadata/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}'
 
-    # train data in save path under trainset folder
+    if pathlib.Path(f'{rir_path}/rirs.pickle').is_file():
+        answer = input(f'Existing RIR file found at \'{rir_path}\', use stored RIRs for faster generation (y/n)? ')
+        if answer.lower() in ['y', 'yes']:
+            with open(f'{rir_path}/rirs.pickle', 'rb') as f:
+                RIRS = pickle.load(f)
+                print('Loaded existing RIR data')
+    if pathlib.Path(save_path).is_dir():
+        answer = input(f'Existing files found, all sub-folders/files in \'{save_path}\' will be deleted (ok/quit) ')
+        if answer.lower() in ['o', 'ok', 'y', 'yes']:
+            rm_tree(pathlib.Path(save_path))
+            print('Old data cleared')
+        else:
+            sys.exit()
+
+    # Store extra metadata
+    if not args.skip_coord_write:
+        write_coordinate_metadata(grid, args.room, metadata_path)
+    if not args.skip_split_write:
+        write_split_metadata(grid, metadata_path)
+
+    # Create dataset divided into trainset and testset
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order)
-    # test data in save path under testset folder
+    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, args=args)
     audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, np.array(args.heights), np.array(args.room), args.rt60, args.order)
+    # grid = create_grid(np.array([8, 4]), args.wall_gap, np.array(args.room))  # todo: generate testset differently (smaller, different points?)
+    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, args=args)
+    
+    # Save calculated RIRs
+    if not args.skip_rir_write:  # might technically need even more specific file names
+        if not pathlib.Path(rir_path).exists():
+            pathlib.Path(rir_path).mkdir(parents=True)
+            with open(f'{rir_path}/rirs.pickle', 'wb') as f:
+                pickle.dump(RIRS, f)
 
 
 if __name__ == '__main__':
