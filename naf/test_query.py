@@ -1,3 +1,4 @@
+import h5py
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -198,23 +199,32 @@ def main():
     with torch.no_grad():
         output = auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
 
+    data_path = "../../code/Learning_Neural_Acoustic_Fields-master/metadata_mono"
     # Load mean and std data
-    mean_std = load_pkl("../../data/naf/order_0/magnitude_mean_std/test_1.pkl")
+    mean_std = load_pkl(f"{data_path}/mean_std/test_1.pkl")
     mean = torch.from_numpy(mean_std[0]).float()[None]
     std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
     output = (output.reshape(1, 1, 256, max_lengths[apt]).cpu() * std[None] + mean[None]).numpy()
     print("Completed inference")
+
+    # Load gt data, todo: use point data to calculate stuff for test points and poll the model at those points
+    sound_data = h5py.File(f"{data_path}/magnitudes/test_1.h5", 'r')
+    sound_keys = list(sound_data.keys())
+    spec_data = torch.from_numpy(sound_data["0_0_199"][:]).float()
+    sound_data.close()
+    spec_data = spec_data[:, :, : max_lengths[apt]]
+    actual_spec_len = spec_data.shape[2]
+    # spec_data = (spec_data - mean[:, :, :actual_spec_len]) / std[:, :, :actual_spec_len]
+    spec_data = (spec_data.reshape(1, 1, 256, max_lengths[apt]).cpu()).numpy()
 
     fig, axarr = plt.subplots(1, 2)
     fig.suptitle("Predicted log impulse response", fontsize=16)
     axarr[0].imshow(output[0, 0], cmap="inferno", vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
     axarr[0].set_title('Predicted')
     axarr[0].axis("off")
-    # plt.subplot(1, 2, 2)
-    # todo: load actual if possible
-    # axarr[1].imshow(output[0, 1], cmap="inferno", vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
-    # axarr[1].set_title('Channel 2')
-    # axarr[1].axis("off")
+    axarr[1].imshow(spec_data[0, 0], cmap="inferno", vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
+    axarr[1].set_title('Ground-truth')
+    axarr[1].axis("off")
     plt.show()
 
 
