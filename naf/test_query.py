@@ -1,6 +1,7 @@
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 import torch
 
 from torch import nn
@@ -32,22 +33,6 @@ class embedding_module_log(nn.Module):
         return torch.cat(out_list, dim=self.ch_dim)
 
 
-def distance(x1, x2):
-    # by jacobrgardner
-    x1_norm = x1.pow(2).sum(dim=-1, keepdim=True)
-    x2_norm = x2.pow(2).sum(dim=-1, keepdim=True)
-    res = torch.addmm(x2_norm.transpose(-2, -1), x1, x2.transpose(-2, -1), alpha=-2).add_(x1_norm)
-    return res
-
-
-def fit_predict_torch(input_pos:torch.Tensor, input_target:torch.Tensor, predict_pos:torch.Tensor, bandwidth:torch.Tensor) -> torch.Tensor:
-    dist_vector = -distance(predict_pos, input_pos)
-    gauss_dist = torch.exp(dist_vector/(2.0 * torch.square(bandwidth.unsqueeze(0))))
-    magnitude = torch.sum(gauss_dist, dim=1, keepdim=True)
-    out = torch.mm(gauss_dist, input_target)/magnitude
-    return out
-
-
 class basic_project2(nn.Module):
     def __init__(self, input_ch, output_ch):
         super(basic_project2, self).__init__()
@@ -73,7 +58,7 @@ class kernel_residual_fc_embeds(nn.Module):
         # probe = True returns the features of the last layer
 
         for k in range(num_block - 1):
-            self.register_parameter("left_right_{}".format(k),nn.Parameter(torch.randn(1, 1, 2, intermediate_ch)/math.sqrt(intermediate_ch),requires_grad=True))
+            self.register_parameter("left_right_{}".format(k),nn.Parameter(torch.randn(1, 1, 1, intermediate_ch)/math.sqrt(intermediate_ch),requires_grad=True))  # changed for mono
 
         for k in range(4):
             self.register_parameter("rot_{}".format(k), nn.Parameter(torch.randn(num_block - 1, 1, 1, intermediate_ch)/math.sqrt(intermediate_ch), requires_grad=True))
@@ -88,7 +73,7 @@ class kernel_residual_fc_embeds(nn.Module):
         self.blocks = len(self.layers)
         self.probe = probe
 
-        ### Make the grid
+        # Make the grid
         grid_coors_x = np.arange(min_xy[0], max_xy[0], grid_gap)
         grid_coors_y = np.arange(min_xy[1], max_xy[1], grid_gap)
         grid_coors_x, grid_coors_y = np.meshgrid(grid_coors_x, grid_coors_y)
@@ -118,14 +103,36 @@ class kernel_residual_fc_embeds(nn.Module):
 
         my_input = torch.cat((total_grid, input_stuff), dim=-1)
         rot_latent = torch.stack([getattr(self, "rot_{}".format(rot_idx_single)) for rot_idx_single in rot_idx], dim=0)
-        out = self.proj(my_input).unsqueeze(2).repeat(1, 1, 2, 1) + getattr(self, "left_right_0") + rot_latent[:, 0]
+        out = self.proj(my_input).unsqueeze(2).repeat(1, 1, 1, 1) + getattr(self, "left_right_0") + rot_latent[:, 0]  # changed for mono
         for k in range(len(self.layers)):
             out = self.layers[k](out) + getattr(self, "left_right_{}".format(k + 1)) + rot_latent[:, k + 1]
             if k == (self.blocks // 2 - 1):
-                out = out + self.residual_1(my_input).unsqueeze(2).repeat(1, 1, 2, 1)
+                out = out + self.residual_1(my_input).unsqueeze(2).repeat(1, 1, 1, 1)  # changed for mono
         if self.probe:
             return out
         return self.out_layer(out)
+
+
+def distance(x1, x2):
+    # by jacobrgardner
+    x1_norm = x1.pow(2).sum(dim=-1, keepdim=True)
+    x2_norm = x2.pow(2).sum(dim=-1, keepdim=True)
+    res = torch.addmm(x2_norm.transpose(-2, -1), x1, x2.transpose(-2, -1), alpha=-2).add_(x1_norm)
+    return res
+
+
+def fit_predict_torch(input_pos:torch.Tensor, input_target:torch.Tensor, predict_pos:torch.Tensor, bandwidth:torch.Tensor) -> torch.Tensor:
+    dist_vector = -distance(predict_pos, input_pos)
+    gauss_dist = torch.exp(dist_vector/(2.0 * torch.square(bandwidth.unsqueeze(0))))
+    magnitude = torch.sum(gauss_dist, dim=1, keepdim=True)
+    out = torch.mm(gauss_dist, input_target)/magnitude
+    return out
+
+
+def load_pkl(path):
+    with open(path, "rb") as loaded_pkl_obj:
+        loaded_pkl = pickle.load(loaded_pkl_obj)
+    return loaded_pkl
 
 
 def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_pos, max_bbox_pos):
@@ -168,8 +175,8 @@ def main():
     loaded = auditory_net.load_state_dict(weights["network"])
     loaded = auditory_net.to("cuda:0")
 
-    emitter_position = np.array([1.0, 1.0, 1.5])  # set manually for now
-    listener_position = np.array([9.0, 5.0, 1.5])
+    emitter_position = np.array([1.0, 1.0])  # set manually for now
+    listener_position = np.array([9.0, 5.0])
     orientation = 0
 
     transformed_input = prepare_input(0, listener_position, emitter_position, max_lengths[apt], min_pos, max_pos)
@@ -190,21 +197,24 @@ def main():
     auditory_net.eval()
     with torch.no_grad():
         output = auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-    # mean = torch.from_numpy(mean_std[0]).float()[None]
-    # std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
-    output = (output.reshape(1, 2, 256, max_lengths[apt]).cpu()).numpy()  # todo: add these somehow * std[None] + mean[None]
+
+    # Load mean and std data
+    mean_std = load_pkl("../../data/naf/order_0/magnitude_mean_std/test_1.pkl")
+    mean = torch.from_numpy(mean_std[0]).float()[None]
+    std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
+    output = (output.reshape(1, 1, 256, max_lengths[apt]).cpu() * std[None] + mean[None]).numpy()
     print("Completed inference")
 
     fig, axarr = plt.subplots(1, 2)
     fig.suptitle("Predicted log impulse response", fontsize=16)
     axarr[0].imshow(output[0, 0], cmap="inferno", vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
-    axarr[0].set_title('Channel 1')
+    axarr[0].set_title('Predicted')
     axarr[0].axis("off")
     # plt.subplot(1, 2, 2)
     # todo: load actual if possible
-    axarr[1].imshow(output[0, 1], cmap="inferno", vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
-    axarr[1].set_title('Channel 2')
-    axarr[1].axis("off")
+    # axarr[1].imshow(output[0, 1], cmap="inferno", vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
+    # axarr[1].set_title('Channel 2')
+    # axarr[1].axis("off")
     plt.show()
 
 
