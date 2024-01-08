@@ -1,4 +1,5 @@
 import h5py
+import librosa
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -158,6 +159,43 @@ def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_p
     return degree, total_position, total_non_norm_position, 2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0, 2.0*torch.from_numpy(selected_time).float()/float(max_len-1)-1.0
 
 
+def to_wave(input_spec, mean_val=None, std_val=None, gl=False, orig_phase=None):
+    if not mean_val is None:
+        renorm_input = input_spec * std_val
+        renorm_input = renorm_input + mean_val
+    else:
+        renorm_input = input_spec + 0.0
+    renorm_input = np.exp(renorm_input) - 1e-3
+    renorm_input = np.clip(renorm_input, 0.0, 100000.0)
+    if orig_phase is None:
+        if gl is False:
+            # Random phase reconstruction per image2reverb
+            np.random.seed(1234)
+            rp = np.random.uniform(-np.pi, np.pi, renorm_input.shape)
+            f = renorm_input * (np.cos(rp) + (1.j * np.sin(rp)))
+            out_wave = librosa.istft(f, hop_length=128)
+        else:
+            out_wave = librosa.griffinlim(renorm_input, hop_length=128, n_iter=40, momentum=0.5, random_state=64)
+    else:
+        f = renorm_input * (np.cos(orig_phase) + (1.j * np.sin(orig_phase)))
+        out_wave = librosa.istft(f, win_length=400, hop_length=200)
+    return out_wave
+
+
+def to_wave_if(input_stft, input_if):
+    # 2 chanel input of shape [2,freq,time]
+    # First input is logged mag
+    # Second input is if divided by np.pi
+    padded_input_stft = np.concatenate((input_stft, input_stft[:, -1:]), axis=1)
+    padded_input_if = np.concatenate((input_if, input_if[:, -1:] * 0.0), axis=1)
+    unwrapped = np.cumsum(padded_input_if, axis=-1) * np.pi
+    phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
+    restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
+    wave1 = librosa.istft(restored[0], hop_length=512 // 4)
+    # wave2 = librosa.istft(restored[1], hop_length=512 // 4)  # mono
+    return wave1  # , wave2
+
+
 def main():
     weights = torch.load('out/00200_mono.chkpt', map_location='cuda:0')  # chkpt file
     min_pos = np.array([0, 0])
@@ -208,14 +246,17 @@ def main():
     print("Completed inference")
 
     # Load gt data, todo: use point data to calculate stuff for test points and poll the model at those points
-    sound_data = h5py.File(f"{data_path}/magnitudes/test_1.h5", 'r')
-    sound_keys = list(sound_data.keys())
-    spec_data = torch.from_numpy(sound_data["0_0_199"][:]).float()
-    sound_data.close()
+    spec_obj = h5py.File(f"{data_path}/magnitudes/test_1.h5", 'r')
+    spec_data = torch.from_numpy(spec_obj["0_0_199"][:]).float()
+    spec_obj.close()
     spec_data = spec_data[:, :, : max_lengths[apt]]
-    actual_spec_len = spec_data.shape[2]
-    # spec_data = (spec_data - mean[:, :, :actual_spec_len]) / std[:, :, :actual_spec_len]
     spec_data = (spec_data.reshape(1, 1, 256, max_lengths[apt]).cpu()).numpy()
+
+    phase_obj = h5py.File(f"../../data/naf/order_0/phases/test_1.h5", 'r')
+    phase_data = torch.from_numpy(phase_obj["0_0_199"][:]).float()
+    phase_obj.close()
+    phase_data = phase_data[:, :, : max_lengths[apt]]
+    phase_data = (phase_data.reshape(1, 1, 256, max_lengths[apt]).cpu()).numpy()
 
     fig, axarr = plt.subplots(1, 2)
     fig.suptitle("Predicted log impulse response", fontsize=16)
@@ -225,6 +266,21 @@ def main():
     axarr[1].imshow(spec_data[0, 0], cmap="inferno", vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
     axarr[1].set_title('Ground-truth')
     axarr[1].axis("off")
+    plt.show()
+
+    # To wave test
+    originals = load_pkl("/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/rirs.pickle")
+    original = originals["0-199"]
+    predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases
+    gt_wave = to_wave_if(spec_data[0], phase_data[0])
+    fig, axarr = plt.subplots(3, 1)
+    fig.suptitle("Predicted impulse response", fontsize=16)
+    axarr[0].plot(predicted_wave)
+    axarr[0].set_title('Predicted')
+    axarr[1].plot(gt_wave)
+    axarr[1].set_title('Ground-truth')
+    axarr[2].plot(original)
+    axarr[2].set_title('Original')
     plt.show()
 
 
