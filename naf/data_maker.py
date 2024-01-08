@@ -15,8 +15,9 @@ from skimage.transform import rescale, resize
 from torchaudio.transforms import Spectrogram
 
 
-class get_spec():
-    def __init__(self, use_torch=False, power_mod=2, fft_size=512):
+class GetSpec:
+    def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=512):
+        self.sr = sr
         self.n_fft = fft_size
         self.hop = self.n_fft // 4
         if use_torch:
@@ -30,8 +31,8 @@ class get_spec():
 
     def transform(self, wav_data_prepad):
         wav_data = librosa.util.fix_length(wav_data_prepad, size=wav_data_prepad.shape[-1] + self.n_fft // 2)
-        if wav_data.shape[1] < 4410:
-            wav_data = librosa.util.fix_length(wav_data, size=4410)
+        if wav_data.shape[1] < self.sr * 0.1:
+            wav_data = librosa.util.fix_length(wav_data, size=int(self.sr * 0.1))
         if self.use_torch:
             transformed_data = self.spec_transform(torch.from_numpy(wav_data)).numpy()
         else:
@@ -94,7 +95,6 @@ def load_audio(path_name, use_torch=True, resample=True, resample_rate=22050):
     return np.clip(resampled_wave, -1.0, 1.0)
 
 
-# Compute mean STD
 def pad(input_arr, max_len_in, constant=np.log(1e-3)):
     return np.pad(input_arr, [[0, 0], [0, 0], [0, max_len_in - input_arr.shape[2]]], constant_values=constant)
 
@@ -118,7 +118,7 @@ def main():
     phase_path = "/worktmp/melandev/data/naf/order_0/phases"
     rooms = ["test_1"]
     max_len_dict = {}
-    spec_getter = get_spec()
+    spec_getter = GetSpec()
     with open(f'{raw_path}/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
@@ -131,11 +131,11 @@ def main():
         for orientation in ["0"]:  # , "90", "180", "270"]:
             progress = tqdm.tqdm(rirs.items())
             for coordinate, rir in progress:
-                resampled = resample(np.clip(rir, -1.0, 1.0).T)
-                # resampled = rir.T
+                # resampled = resample(np.clip(rir, -1.0, 1.0).T)
+                resampled = rir.T
                 real_spec, img_spec, raw_phase = spec_getter.transform(resampled)
                 length_tracker.append(real_spec.shape[2])
-                reconstructed_wave = get_wave_if(real_spec, img_spec)
+                # reconstructed_wave = get_wave_if(real_spec, img_spec)
                 # fig, axes = plt.subplots(2, 1)
                 # axes[0].plot(np.arange(len(reconstructed_wave)) / sr, reconstructed_wave)  # sr depends on resampling
                 # axes[0].set_title('Reconstructed waveform')
@@ -164,9 +164,10 @@ def main():
         keys = list(f.keys())
         max_len = max_len_dict[f_name.split(".")[0]]
         all_arrs = []
-        for idx in np.random.choice(len(keys), 4000, replace=False):
-            all_arrs.append(pad(f[keys[idx]], max_len).astype(np.single))
-        all_arrs_2 = np.array(all_arrs, copy=False, dtype=np.single)
+        # for idx in np.random.choice(len(keys), 4000, replace=False):
+        #    all_arrs.append(pad(f[keys[idx]], max_len).astype(np.single))
+        for key in keys:
+            all_arrs.append(pad(f[key], max_len).astype(np.single))
         print("Computing mean")
         mean_val = np.mean(all_arrs, axis=(0, 1))
         print("Computing std")
