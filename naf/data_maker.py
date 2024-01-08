@@ -112,10 +112,10 @@ def resample(wave_data, sr=16000, resample_rate=22050):
 
 
 def main():
-    # Loop through audio, resample to 22050 Hz and make each log magnitude
-    raw_path = "/opt/tuni/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/"
-    mag_path = "/opt/tuni/worktmp/melandev/data/naf/order_0/magnitudes"
-    phase_path = "/opt/tuni/worktmp/melandev/data/naf/order_0/phases"
+    sr = 16000
+    raw_path = "/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/"
+    mag_path = "/worktmp/melandev/data/naf/order_0/magnitudes"
+    phase_path = "/worktmp/melandev/data/naf/order_0/phases"
     rooms = ["test_1"]
     max_len_dict = {}
     spec_getter = get_spec()
@@ -124,22 +124,25 @@ def main():
 
     for room_name in rooms:
         length_tracker = []
-        room_path = os.path.join(raw_path, room_name)
         mag_object = os.path.join(mag_path, room_name)
         phase_object = os.path.join(phase_path, room_name)
         f_mag = h5py.File(mag_object + ".h5", 'w')
         f_phase = h5py.File(phase_object + ".h5", 'w')
         for orientation in ["0"]:  # , "90", "180", "270"]:
-            ori_path = os.path.join(room_path, orientation)
             progress = tqdm.tqdm(rirs.items())
             for coordinate, rir in progress:
-                rir = resample(np.clip(rir, -1.0, 1.0).T)
-                real_spec, img_spec, raw_phase = spec_getter.transform(rir)
+                resampled = resample(np.clip(rir, -1.0, 1.0).T)
+                # resampled = rir.T
+                real_spec, img_spec, raw_phase = spec_getter.transform(resampled)
                 length_tracker.append(real_spec.shape[2])
-                # reconstructed_wave = get_wave_if(real_spec, img_spec)
-                # plt.plot(reconstructed_wave)
-                # plt.show()
-                # plt.plot(rir[0, :])
+                reconstructed_wave = get_wave_if(real_spec, img_spec)
+                # fig, axes = plt.subplots(2, 1)
+                # axes[0].plot(np.arange(len(reconstructed_wave)) / sr, reconstructed_wave)  # sr depends on resampling
+                # axes[0].set_title('Reconstructed waveform')
+                # axes[0].set_xlim([0, 0.2])
+                # axes[1].plot(np.arange(len(rir)) / sr, rir)
+                # axes[1].set_title('Original waveform')
+                # axes[1].set_xlim([0, 0.2])
                 # plt.show()
                 # plt.imshow(real_spec[0])
                 # plt.show()
@@ -152,9 +155,8 @@ def main():
         f_mag.close()
         f_phase.close()
 
-    raw_path = "/opt/tuni/worktmp/melandev/data/naf/order_0/magnitudes"
-    mean_std = "/opt/tuni/worktmp/melandev/data/naf/order_0/magnitude_mean_std"
-    files = os.listdir(raw_path)
+    raw_path = mag_path
+    mean_std = "/worktmp/melandev/data/naf/order_0/magnitude_mean_std"
     for f_name_old in sorted(list(max_len_dict.keys())):
         f_name = f_name_old + ".h5"
         print("Processing ", f_name)
