@@ -201,7 +201,7 @@ def main():
     min_pos = np.array([0, 0])
     max_pos = np.array([10, 6])
     apt = "test_1"
-    max_lengths = {"test_1": 37}
+    max_lengths = {"test_1": 28}  # 35
     output_device = 0
     num_freqs = 10
 
@@ -269,19 +269,20 @@ def main():
     plt.show()
 
     # To wave test
+    sr = 16000  # Currently 16k for all data, training data was originally resampled
     originals = load_pkl("/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/rirs.pickle")
     original = originals["0-199"]
     predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases
     gt_wave = to_wave_if(spec_data[0], phase_data[0])
     fig, axarr = plt.subplots(3, 1)
     fig.suptitle("Predicted impulse response", fontsize=16)
-    axarr[0].plot(np.arange(len(predicted_wave)) / 22050, predicted_wave)
+    axarr[0].plot(np.arange(len(predicted_wave)) / sr, predicted_wave)
     axarr[0].set_xlim([0, 0.2])
     axarr[0].set_title('Predicted')
-    axarr[1].plot(np.arange(len(gt_wave)) / 22050, gt_wave)
+    axarr[1].plot(np.arange(len(gt_wave)) / sr, gt_wave)
     axarr[1].set_xlim([0, 0.2])
     axarr[1].set_title('Ground-truth')
-    axarr[2].plot(np.arange(len(original)) / 16000, original)
+    axarr[2].plot(np.arange(len(original)) / sr, original)
     axarr[2].set_xlim([0, 0.2])
     axarr[2].set_title('Original')
     plt.show()
