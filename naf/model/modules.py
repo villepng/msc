@@ -1,8 +1,10 @@
-import torch
-from torch import nn
 import numpy as np
+import torch
 
-class embedding_module_log(nn.Module):
+from torch import nn
+
+
+class EmbeddingModuleLog(nn.Module):
     def __init__(self, funcs=[torch.sin, torch.cos], num_freqs=20, max_freq=10, ch_dim=1, include_in=True):
         super().__init__()
         self.functions = funcs
@@ -22,12 +24,14 @@ class embedding_module_log(nn.Module):
                 out_list.append(func(x_input*freq))
         return torch.cat(out_list, dim=self.ch_dim)
 
+
 def distance(x1, x2):
     # by jacobrgardner
     x1_norm = x1.pow(2).sum(dim=-1, keepdim=True)
     x2_norm = x2.pow(2).sum(dim=-1, keepdim=True)
     res = torch.addmm(x2_norm.transpose(-2, -1), x1, x2.transpose(-2, -1), alpha=-2).add_(x1_norm)
     return res
+
 
 # small improvement in performance
 # @torch.jit.script

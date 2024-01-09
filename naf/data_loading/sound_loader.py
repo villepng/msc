@@ -1,24 +1,24 @@
-import numpy.random
-import torch
+import h5py
+import numpy as np
 import os
 import pickle
-import numpy as np
 import random
-import h5py
+import torch
+
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
-
-
-def listdir(path):
-    return [os.path.join(path, x) for x in os.listdir(path)]
 
 
 def join(*paths):
     return os.path.join(*paths)
 
 
-class soundsamples(torch.utils.data.Dataset):
+def listdir(path):
+    return [os.path.join(path, x) for x in os.listdir(path)]
+
+
+class Soundsamples(torch.utils.data.Dataset):
     def __init__(self, arg_stuff):
         coor_base = arg_stuff.coor_base
         spec_base = arg_stuff.spec_base
@@ -27,48 +27,48 @@ class soundsamples(torch.utils.data.Dataset):
         room_name = arg_stuff.apt
         num_samples = arg_stuff.pixel_count
 
-        coor_path = os.path.join(coor_base, room_name, "points.txt")
+        coor_path = os.path.join(coor_base, room_name, 'points.txt')
         max_len = arg_stuff.max_len
         self.max_len = max_len[room_name]
-        full_path = os.path.join(spec_base, room_name+".h5")
+        full_path = os.path.join(spec_base, room_name+'.h5')
 
-        print("Caching the room coordinate indices, this will take a while....")
+        print('Caching the room coordinate indices, this will take a while....')
         # See https://discuss.pytorch.org/t/dataloader-when-num-worker-0-there-is-bug/25643
         self.sound_data = []
         self.sound_data = h5py.File(full_path, 'r')
         self.sound_keys = list(self.sound_data.keys())
         self.sound_data.close()
-        print("Completed room coordinate index caching")
+        print('Completed room coordinate index caching')
         self.sound_data = None
         self.full_path = full_path
 
-        files = [(mykey.split("_")[0], "_".join(mykey.split("_")[1:])) for mykey in self.sound_keys]
-        self.sound_files = {"0": [], "90": [], "180": [], "270": []}
-        self.sound_files_test = {"0": [], "90": [], "180": [], "270": []}
+        files = [(mykey.split('_')[0], '_'.join(mykey.split('_')[1:])) for mykey in self.sound_keys]
+        self.sound_files = {'0': [], '90': [], '180': [], '270': []}
+        self.sound_files_test = {'0': [], '90': [], '180': [], '270': []}
 
-        train_test_split_path = os.path.join(arg_stuff.split_loc, arg_stuff.apt + "_complete.pkl")
-        with open(train_test_split_path, "rb") as train_test_file_obj:
+        train_test_split_path = os.path.join(arg_stuff.split_loc, arg_stuff.apt + '_complete.pkl')
+        with open(train_test_split_path, 'rb') as train_test_file_obj:
             train_test_split = pickle.load(train_test_file_obj)
         # use train test split
 
         self.sound_files = train_test_split[0]
         self.sound_files_test = train_test_split[1]
 
-        with open(os.path.join(mean_std_base, room_name+".pkl"), "rb") as mean_std_ff:
+        with open(os.path.join(mean_std_base, room_name+'.pkl'), 'rb') as mean_std_ff:
             mean_std = pickle.load(mean_std_ff)
-            print("Loaded mean std")
+            print('Loaded mean std')
         self.mean = torch.from_numpy(mean_std[0]).float()[None]
         self.std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
 
-        with open(coor_path, "r") as f:
+        with open(coor_path, 'r') as f:
             lines = f.readlines()
-        coords = [x.replace("\n", "").split(" ") for x in lines]  # use \t for the original way
+        coords = [x.replace('\n', "").split(' ') for x in lines]  # use \t for the original way
         self.positions = dict()
         for row in coords:
             readout = [float(xyz) for xyz in row[1:]]
             self.positions[row[0]] = [readout[0], readout[1]]  # originally - for [1]??
 
-        with open(os.path.join(minmax_base, room_name+"_minmax.pkl"), "rb") as min_max_loader:
+        with open(os.path.join(minmax_base, room_name+'_minmax.pkl'), 'rb') as min_max_loader:
             min_maxes = pickle.load(min_max_loader)
             self.min_pos = min_maxes[0][0:2]
             self.max_pos = min_maxes[1][0:2]  # Different dimensions are the floor plane, problematic?
@@ -88,7 +88,7 @@ class soundsamples(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         loaded = False
-        orientations = ["0"]  # , "90", "180", "270"]
+        orientations = ['0']  # , '90', '180', '270']
         while not loaded:
             try:
                 orientation_idx = 0  # random.randint(0, 3)
@@ -98,10 +98,10 @@ class soundsamples(torch.utils.data.Dataset):
                     self.sound_data = h5py.File(self.full_path, 'r')
 
                 pos_id = self.sound_files[int(orientation)][idx]  # todo: why is the key an integer and not string??
-                query_str = orientation + "_" + pos_id
+                query_str = orientation + '_' + pos_id
 
                 spec_data = torch.from_numpy(self.sound_data[query_str][:]).float()
-                position = (pos_id.split(".")[0]).split("_")
+                position = (pos_id.split('.')[0]).split('_')
                 spec_data = spec_data[:, :, :self.max_len]
 
                 if random.random() < 0.1:
@@ -134,7 +134,7 @@ class soundsamples(torch.utils.data.Dataset):
             except Exception as e:
                 print(query_str)
                 print(e)
-                print("Failed to load sound sample")
+                print('Failed to load sound sample')
 
         return selected_total, degree, total_position, total_non_norm_position, 2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0, 2.0*torch.from_numpy(selected_time).float()/float(self.max_len-1)-1.0
 
@@ -160,16 +160,16 @@ class soundsamples(torch.utils.data.Dataset):
         return degree, total_position, total_non_norm_position, 2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0, 2.0*torch.from_numpy(selected_time).float()/float(self.max_len-1)-1.0
 
     def get_item_test(self, orientation_idx, idx):
-        orientations = ["0"]  # , "90", "180", "270"]
+        orientations = ['0']  # , '90', '180', '270']
         orientation = orientations[orientation_idx]
         selected_files = self.sound_files_test
         if self.sound_data is None:
             self.sound_data = h5py.File(self.full_path, 'r')
         pos_id = selected_files[orientation][idx]
-        query_str = orientation + "_" + pos_id
+        query_str = orientation + '_' + pos_id
         spec_data = torch.from_numpy(self.sound_data[query_str][:]).float()
 
-        position = (pos_id.split(".")[0]).split("_")
+        position = (pos_id.split('.')[0]).split('_')
 
         spec_data = spec_data[:, :, :self.max_len]
         actual_spec_len = spec_data.shape[2]
@@ -198,5 +198,3 @@ class soundsamples(torch.utils.data.Dataset):
 
         selected_total = spec_data[:, selected_freq, selected_time]
         return selected_total, degree, total_position, total_non_norm_position, 2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0, 2.0*torch.from_numpy(selected_time).float()/float(self.max_len-1)-1.0
-
-
