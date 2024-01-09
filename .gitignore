@@ -1,6 +1,8 @@
 __pycache__/
 .idea/
 .vscode/
+/naf/metadata
 /naf/out
+/naf/test_results
 *.txt
 *.wav
