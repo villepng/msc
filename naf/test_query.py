@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import torch
+import tqdm
 
 from scipy.io import wavfile
 from scipy.signal import fftconvolve
@@ -13,28 +14,48 @@ from model.modules import EmbeddingModuleLog
 from model.networks import KernelResidualFCEmbeds
 from options import Options
 
-"""
+'''
     Code from https://github.com/aluo-x/Learning_Neural_Acoustic_Fields
-"""
+'''
 
 
 def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device):
-    transformed_input = prepare_input(0, rcv_pos, src_pos, max_len, min_pos, max_pos)
-
     xyz_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2, max_freq=7).to(output_device)
     time_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
     freq_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
+
+    transformed_input = prepare_input(0, rcv_pos, src_pos, max_len, min_pos, max_pos)
     degree = torch.Tensor([transformed_input[0]]).to(output_device, non_blocking=True).long()
     position = transformed_input[1][None].to(output_device, non_blocking=True)
     non_norm_position = transformed_input[2].to(output_device, non_blocking=True)
     freqs = transformed_input[3][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
     times = transformed_input[4][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
     pixel_count = max_len * 256
+
     position_embed = xyz_embedder(position).expand(-1, pixel_count, -1)
     freq_embed = freq_embedder(freqs)
     time_embed = time_embedder(times)
 
     return torch.cat((position_embed, freq_embed, time_embed), dim=2), degree, non_norm_position
+
+
+def load_gt_data(args):
+    spec_obj = h5py.File(f'{args.spec_base}/test_1.h5', 'r')
+    phase_obj = h5py.File(f'../../data/naf/order_0/phases/test_1.h5', 'r')
+
+    with open(f'{args.coor_base}/{args.apt}/points.txt', 'r') as f:
+        lines = f.readlines()
+    points = [x.replace('\n', "").split(' ') for x in lines]
+    positions = dict()
+    for row in points:
+        readout = [float(xyz) for xyz in row[1:]]
+        positions[row[0]] = [readout[0], readout[1]]
+
+    train_test_split = load_pkl(f'{args.split_loc}/{args.apt}_complete.pkl')
+    train_keys = train_test_split[0]
+    test_keys = train_test_split[1]
+
+    return spec_obj, phase_obj, positions, train_keys, test_keys
 
 
 def load_pkl(path):
@@ -73,8 +94,8 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
                                           grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
                                           bandwidth_max=args.max_bandwidth, float_amt=args.position_float,
                                           min_xy=min_pos, max_xy=max_pos).to(output_device)
-    auditory_net.load_state_dict(weights["network"])
-    auditory_net.to("cuda:0")
+    auditory_net.load_state_dict(weights['network'])
+    auditory_net.to('cuda:0')
 
     return auditory_net
 
@@ -122,59 +143,59 @@ def main():
     max_len = args.max_len[apt]
     weight_path = 'out/00200_2.chkpt'
     min_max = load_pkl(f'{args.minmax_base}/{args.apt}_minmax.pkl')
-    min_pos = np.array(min_max[0][0:2])  # todo: make into np.array when created
+    min_pos = np.array(min_max[0][0:2])  # todo: make into np.array when created originally
     max_pos = np.array(min_max[1][0:2])
     output_device = 0
+    orientation = 0
 
-    network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
-
-    src_pos = np.array([1.0, 1.0])  # set manually for now
-    rcv_pos = np.array([9.0, 5.0])
-    net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
-    network.eval()
-    with torch.no_grad():
-        output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-
-    data_path = "../../code/Learning_Neural_Acoustic_Fields-master/metadata_mono"
-    # Load mean and std data
-    mean_std = load_pkl(f"{data_path}/mean_std/test_1.pkl")
+    # Load mean and std data & gt data and prepare the network
+    mean_std = load_pkl(f'{args.mean_std_base}/{apt}.pkl')
     mean = torch.from_numpy(mean_std[0]).float()[None]
     std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
-    output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
-    print("Completed inference")
+    spec_obj, phase_obj, points, train_keys, test_keys = load_gt_data(args)
+    network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
-    # Load gt data, todo: use point data to calculate stuff for test points and poll the model at those points
-    spec_obj = h5py.File(f"{data_path}/magnitudes/test_1.h5", 'r')
-    spec_data = torch.from_numpy(spec_obj["0_0_199"][:]).float()
+    # Poll network at every training data point and calculate metrics against gt data
+    metrics = {'mse': [], 'spec': [], 't60': [], 'drr': []}  # todo
+    progress = tqdm.tqdm(train_keys[orientation])
+    progress.set_description('Polling network at every train data point to calculate error metrics')
+    for key in progress:
+        full_key = f'{orientation}_{key}'
+        src, rcv = key.split('_')
+        src_pos, rcv_pos = points[src], points[rcv]
+        spec_data, phase_data = torch.from_numpy(phase_obj[full_key][:]).float(), torch.from_numpy(phase_obj[full_key][:]).float()
+        # spec_data = (spec_data.reshape(1, 1, 256, max_len).cpu()).numpy()
+        net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
+        network.eval()
+        with torch.no_grad():
+            output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
+        output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
+
     spec_obj.close()
-    spec_data = spec_data[:, :, : max_len]
-    spec_data = (spec_data.reshape(1, 1, 256, max_len).cpu()).numpy()
-
-    phase_obj = h5py.File(f"../../data/naf/order_0/phases/test_1.h5", 'r')
-    phase_data = torch.from_numpy(phase_obj["0_0_199"][:]).float()
     phase_obj.close()
-    phase_data = phase_data[:, :, : max_len]
-    phase_data = (phase_data.reshape(1, 1, 256, max_len).cpu()).numpy()
 
+
+if __name__ == '__main__':
+    main()
+    """ Plotting
     fig, axarr = plt.subplots(1, 2)
-    fig.suptitle("Predicted log impulse response", fontsize=16)
-    axarr[0].imshow(output[0, 0], cmap="inferno", vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
+    fig.suptitle('Predicted log impulse response', fontsize=16)
+    axarr[0].imshow(output[0, 0], cmap='inferno', vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
     axarr[0].set_title('Predicted')
-    axarr[0].axis("off")
-    axarr[1].imshow(spec_data[0, 0], cmap="inferno", vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
+    axarr[0].axis('off')
+    axarr[1].imshow(spec_data[0, 0], cmap='inferno', vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
     axarr[1].set_title('Ground-truth')
-    axarr[1].axis("off")
+    axarr[1].axis('off')
     plt.show()
 
     # To wave test
     sr = 16000  # Currently 16k for all data, training data was originally resampled
-    originals = load_pkl(
-        "/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/rirs.pickle")
-    original = originals["0-199"]
+    originals = load_pkl('/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/rirs.pickle')
+    original = originals['0-199']
     predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases
     gt_wave = to_wave_if(spec_data[0], phase_data[0])
     fig, axarr = plt.subplots(3, 1)
-    fig.suptitle("Predicted impulse response", fontsize=16)
+    fig.suptitle('Predicted impulse response', fontsize=16)
     axarr[0].plot(np.arange(len(predicted_wave)) / sr, predicted_wave)
     axarr[0].set_xlim([0, 0.2])
     axarr[0].set_title('Predicted')
@@ -187,11 +208,8 @@ def main():
     plt.show()
 
     # Audio test
-    fs, mono = wavfile.read(
-        "/worktmp/melandev/data/generated/rir_ambisonics_order_0_20x10/trainset/subject199/mono.wav")
+    fs, mono = wavfile.read('/worktmp/melandev/data/generated/rir_ambisonics_order_0_20x10/trainset/subject199/mono.wav')
     wave_rir_out = fftconvolve(mono, predicted_wave)
     wavfile.write(f'./out/predicted_wave.wav', fs, wave_rir_out.astype(np.int16))
-
-
-if __name__ == '__main__':
-    main()
+    
+    """
