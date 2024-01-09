@@ -33,62 +33,62 @@ def worker_init_fn(worker_id, myrank_info):
     np.random.seed(worker_id + myrank_info * 100)
 
 
-def train_net(rank, world_size, freeport, other_args):
+def train_net(rank, world_size, freeport, arguments):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = freeport
     output_device = rank
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
 
     pi = math.pi
-    pixel_count = other_args.pixel_count
+    pixel_count = arguments.pixel_count
 
-    dataset = Soundsamples(other_args)
+    dataset = Soundsamples(arguments)
     train_sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas=world_size, rank=rank)
     ranked_worker_init = functools.partial(worker_init_fn, myrank_info=rank)
-    sound_loader = torch.utils.data.DataLoader(dataset, batch_size=other_args.batch_size // world_size, shuffle=False,
+    sound_loader = torch.utils.data.DataLoader(dataset, batch_size=arguments.batch_size // world_size, shuffle=False,
                                                num_workers=3, worker_init_fn=ranked_worker_init,
                                                persistent_workers=True, sampler=train_sampler, drop_last=False)
 
-    xyz_embedder = EmbeddingModuleLog(num_freqs=other_args.num_freqs, ch_dim=2, max_freq=7).to(output_device)
-    time_embedder = EmbeddingModuleLog(num_freqs=other_args.num_freqs, ch_dim=2).to(output_device)
-    freq_embedder = EmbeddingModuleLog(num_freqs=other_args.num_freqs, ch_dim=2).to(output_device)
+    xyz_embedder = EmbeddingModuleLog(num_freqs=arguments.num_freqs, ch_dim=2, max_freq=7).to(output_device)
+    time_embedder = EmbeddingModuleLog(num_freqs=arguments.num_freqs, ch_dim=2).to(output_device)
+    freq_embedder = EmbeddingModuleLog(num_freqs=arguments.num_freqs, ch_dim=2).to(output_device)
 
-    auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=other_args.features,
-                                             grid_ch=other_args.grid_features, num_block=other_args.layers,
-                                             grid_gap=other_args.grid_gap, grid_bandwidth=other_args.bandwith_init,
-                                             bandwidth_min=other_args.min_bandwidth,
-                                             bandwidth_max=other_args.max_bandwidth,
-                                             float_amt=other_args.position_float, min_xy=dataset.min_pos,
+    auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=arguments.features,
+                                             grid_ch=arguments.grid_features, num_block=arguments.layers,
+                                             grid_gap=arguments.grid_gap, grid_bandwidth=arguments.bandwith_init,
+                                             bandwidth_min=arguments.min_bandwidth,
+                                             bandwidth_max=arguments.max_bandwidth,
+                                             float_amt=arguments.position_float, min_xy=dataset.min_pos,
                                              max_xy=dataset.max_pos).to(output_device)
 
     if rank == 0:
-        print('Dataloader requires {} batches'.format(len(sound_loader)))
+        print(f'Dataloader requires {len(sound_loader)} batches')
 
     start_epoch = 1
     load_opt = 0
     loaded_weights = False
-    if other_args.resume:
-        if not os.path.isdir(other_args.exp_dir):
+    if arguments.resume:
+        if not os.path.isdir(arguments.exp_dir):
             print('Missing save dir, exiting')
             dist.barrier()
             dist.destroy_process_group()
             return 1
         else:
-            current_files = sorted(os.listdir(other_args.exp_dir))
+            current_files = sorted(os.listdir(arguments.exp_dir))
             if len(current_files) > 0:
                 latest = current_files[-1]
                 start_epoch = int(latest.split('.')[0]) + 1
                 if rank == 0:
-                    print('Identified checkpoint {}'.format(latest))
-                if start_epoch >= (other_args.epochs + 1):
+                    print(f'Identified checkpoint \'{latest}\'')
+                if start_epoch >= (arguments.epochs + 1):
                     dist.barrier()
                     dist.destroy_process_group()
                     return 1
                 map_location = 'cuda:%d' % rank
-                weight_loc = os.path.join(other_args.exp_dir, latest)
+                weight_loc = os.path.join(arguments.exp_dir, latest)
                 weights = torch.load(weight_loc, map_location=map_location)
                 if rank == 0:
-                    print('Checkpoint loaded {}'.format(weight_loc))
+                    print(f'Checkpoint loaded from \'{weight_loc}\'')
                 auditory_net.load_state_dict(weights['network'])
                 loaded_weights = True
                 if 'opt' in weights:
@@ -112,18 +112,17 @@ def train_net(rank, world_size, freeport, other_args):
             orig_container.append(par_val)
 
     optimizer = torch.optim.AdamW([
-        {'params': grid_container, 'lr': other_args.lr_init, 'weight_decay': 1e-2},
-        {'params': orig_container, 'lr': other_args.lr_init, 'weight_decay': 0.0}], lr=other_args.lr_init,
+        {'params': grid_container, 'lr': arguments.lr_init, 'weight_decay': 1e-2},
+        {'params': orig_container, 'lr': arguments.lr_init, 'weight_decay': 0.0}], lr=arguments.lr_init,
         weight_decay=0.0)
 
     if load_opt:
-        print('loading optimizer')
+        print('Loading optimizer')
         optimizer.load_state_dict(weights['opt'])
         dist.barrier()
 
-    if rank == 0:
-        old_time = time()
-    progress = tqdm.tqdm(range(start_epoch, other_args.epochs + 1))
+    progress = tqdm.tqdm(range(start_epoch, arguments.epochs + 1))
+    progress.set_description(f'Starting training for room \'{arguments.exp_name}\'')
     for epoch in progress:
         total_losses = 0
         cur_iter = 0
@@ -155,9 +154,9 @@ def train_net(rank, world_size, freeport, other_args):
                 cur_iter += 1
             loss.backward()
             optimizer.step()
-        decay_rate = other_args.lr_decay
-        new_lrate_grid = other_args.lr_init * (decay_rate ** (epoch / other_args.epochs))
-        new_lrate = other_args.lr_init * (decay_rate ** (epoch / other_args.epochs))
+        decay_rate = arguments.lr_decay
+        new_lrate_grid = arguments.lr_init * (decay_rate ** (epoch / arguments.epochs))
+        new_lrate = arguments.lr_init * (decay_rate ** (epoch / arguments.epochs))
 
         par_idx = 0
         for param_group in optimizer.param_groups:
@@ -168,14 +167,12 @@ def train_net(rank, world_size, freeport, other_args):
             par_idx += 1
         if rank == 0:
             avg_loss = total_losses.item() / cur_iter
-            print('{}: Ending epoch {}, loss {}, time {}'.format(other_args.exp_name, epoch, avg_loss, time() - old_time))  # todo: update for tqdm
-            old_time = time()
-        if rank == 0 and (epoch % 20 == 0 or epoch == 1 or epoch > (other_args.epochs - 3)):
-            save_name = str(epoch).zfill(5) + '.chkpt'
-            save_dict = {}
-            save_dict['network'] = ddp_auditory_net.module.state_dict()
-            torch.save(save_dict, os.path.join(other_args.exp_dir, save_name))
-    print('Wrapping up training {}'.format(other_args.exp_name))
+            progress.set_description(f'Ending epoch {epoch} for room \'{arguments.exp_name}\', loss {avg_loss}')
+        if rank == 0 and (epoch % 20 == 0 or epoch == 1 or epoch > (arguments.epochs - 3)):
+            save_name = str(epoch).zfill(4) + '.chkpt'
+            save_dict = {'network': ddp_auditory_net.module.state_dict()}
+            torch.save(save_dict, os.path.join(arguments.exp_dir, save_name))
+    print(f'Wrapping up training for room \'{arguments.exp_name}\'')
     dist.barrier()
     dist.destroy_process_group()
     return 1

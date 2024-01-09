@@ -4,7 +4,7 @@ import torch
 
 from torch import nn
 
-from modules import fit_predict_torch
+from model.modules import fit_predict_torch
 
 
 class BasicProject2(nn.Module):

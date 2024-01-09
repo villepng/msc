@@ -23,18 +23,19 @@ class Options:
         self.initialized = False
 
     def initialize(self):
+        order = 'mono'  # ambisonic_1 etc. to change metadata folders faster
         parser = self.parser
-        parser.add_argument('--save_loc', default="./test_results", type=str)
+        parser.add_argument('--save_loc', default='./test_results', type=str)
         parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
-        parser.add_argument('--exp_name', default="{}")
+        parser.add_argument('--exp_name', default='{}')
 
         # dataset arguments
-        parser.add_argument('--coor_base', default="./metadata_mono/replica", type=str)  # Location of the training index to coordinate mapping
-        parser.add_argument('--spec_base', default="./metadata_mono/magnitudes", type=str)
-        parser.add_argument('--mean_std_base', default="./metadata_mono/mean_std", type=str)
-        parser.add_argument('--minmax_base', default="./metadata_mono/minmax", type=str)
-        parser.add_argument('--wav_base', default="/media/aluo/big2/soundspaces_full/binaural_rirs/replica", type=str)  # Location of impulses in raw .wav format, to remove?
-        parser.add_argument('--split_loc', default="./metadata_mono/train_test_split/", type=str)
+        parser.add_argument('--coor_base', default=f'./metadata/{order}/replica', type=str)  # Location of the training index to coordinate mapping
+        parser.add_argument('--spec_base', default=f'./metadata/{order}/magnitudes', type=str)
+        parser.add_argument('--mean_std_base', default=f'./metadata/{order}/mean_std', type=str)
+        parser.add_argument('--minmax_base', default=f'./metadata/{order}/minmax', type=str)
+        parser.add_argument('--wav_base', default='/media/aluo/big2/soundspaces_full/binaural_rirs/replica', type=str)  # Location of impulses in raw .wav format, to remove?
+        parser.add_argument('--split_loc', default=f'./metadata/{order}/train_test_split/', type=str)
 
         # training arguments
         parser.add_argument('--gpus', default=1, type=int)
@@ -71,8 +72,8 @@ class Options:
         torch.manual_seed(0)
         np.random.seed(0)
         args = vars(self.opt)
-        print('| options')
+        print('Arguments for the current run:')
         for k, v in args.items():
-            print('%s: %s' % (str(k), str(v)))
+            print('    %s: %s' % (str(k), str(v)))
         print()
         return self.opt
