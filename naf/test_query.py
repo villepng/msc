@@ -6,6 +6,8 @@ import numpy as np
 import pickle
 import torch
 
+from scipy.io import wavfile
+from scipy.signal import fftconvolve
 from torch import nn
 
 
@@ -197,7 +199,7 @@ def to_wave_if(input_stft, input_if):
 
 
 def main():
-    weights = torch.load('out/00200_mono.chkpt', map_location='cuda:0')  # chkpt file
+    weights = torch.load('out/00200_2.chkpt', map_location='cuda:0')  # chkpt file
     min_pos = np.array([0, 0])
     max_pos = np.array([10, 6])
     apt = "test_1"
@@ -286,6 +288,11 @@ def main():
     axarr[2].set_xlim([0, 0.2])
     axarr[2].set_title('Original')
     plt.show()
+
+    # Audio test
+    fs, mono = wavfile.read("/worktmp/melandev/data/generated/rir_ambisonics_order_0_20x10/trainset/subject199/mono.wav")
+    wave_rir_out = fftconvolve(mono, predicted_wave)
+    wavfile.write(f'./out/predicted_wave.wav', fs, wave_rir_out.astype(np.int16))
 
 
 if __name__ == '__main__':
