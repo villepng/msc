@@ -79,17 +79,18 @@ def plot_stft(pred, gt, points):
 def plot_wave(pred, gt, points, sr=16000):
     fig, axarr = plt.subplots(3, 1)
     fig.suptitle(f'Predicted impulse response {points}', fontsize=16)
+    max_len = max(np.arange(len(gt)) / sr)
     axarr[0].plot(np.arange(len(pred)) / sr, pred)
-    axarr[0].set_xlim([0, 0.2])
+    axarr[0].set_xlim([0, max_len])
     axarr[0].set_ylim([None, max(gt) * 1.1])
     axarr[0].set_title('Predicted')
     axarr[1].plot(np.arange(len(gt)) / sr, gt)
-    axarr[1].set_xlim([0, 0.2])
+    axarr[1].set_xlim([0, max_len])
     axarr[1].set_ylim([None, max(gt) * 1.1])
     axarr[1].set_title('Ground-truth')
-    axarr[2].plot(np.arange(len(np.subtract(pred, gt))) / sr, np.subtract(pred, gt))
+    axarr[2].plot(np.arange(len(np.subtract(pred[:len(gt)], gt))) / sr, np.subtract(pred[:len(gt)], gt))
     axarr[2].set_ylim([None, max(gt) * 1.1])
-    axarr[2].set_xlim([0, 0.2])
+    axarr[2].set_xlim([0, max_len])
     axarr[2].set_title('Error')
     plt.show()
 
@@ -189,8 +190,8 @@ def main():
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
     # Polling the network to calculate error metrics
-    metrics = {'train': {'mse': [], 'spec': [], 't60': [], 'drr': [], 'errors': 0},
-               'test': {'mse': [], 'spec': [], 't60': [], 'drr': [], 'errors': 0}}  # todo
+    metrics = {'train': {'mse': [], 'mse_wav': [], 'spec': [], 't60': [], 'drr': [], 'errors': 0},
+               'test': {'mse': [], 'mse_wav': [], 'spec': [], 't60': [], 'drr': [], 'errors': 0}}  # todo
     for part, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)
         progress.set_description(f'Polling network to calculate error metrics at {part} data points')
@@ -211,28 +212,44 @@ def main():
             network.eval()
             with torch.no_grad():
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-            # output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
             output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
 
+            # todo: save predicted rirs in some form?
             # Convert into time domain to calculate metrics
-            predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases
+            predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases, todo
             gt_wave = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
-
             if predicted_wave is not None and gt_wave is not None:
                 metrics[part]['mse'].append(np.square(np.subtract(predicted_wave, gt_wave)).mean())
+
+                # Calculate errors from reverberant audio generated using the RIRs
+                src, rcv = int(src), int(rcv)
+                if rcv < src:
+                    subj = src * 199 + rcv + 1  # will depend on grid size, todo: parametrize with an argument maybe
+                else:
+                    subj = src * 199 + rcv
+                fs, mono = wavfile.read(f'../../data/generated/rir_ambisonics_order_0_20x10/{part}set/subject{subj}/mono.wav')
+                fs, ambisonic = wavfile.read(f'../../data/generated/rir_ambisonics_order_0_20x10/{part}set/subject{subj}/ambisonic.wav')
+                wave_rir_out = fftconvolve(mono, predicted_wave)
+                metrics[part]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
+
+                if i < 1:  # or key == '0_199':
+                    plot_stft(output, spec_data, key)
+                    plot_wave(predicted_wave, gt_wave, key)
+                if i < 10:  # save reverberant audio for some of the early points
+                    plot_wave(wave_rir_out, ambisonic, key)
+                    wavfile.write(f'./out/pred_{key}_s{subj}.wav', fs, wave_rir_out.astype(np.int16))
             else:
                 metrics[part]['errors'] += 1
-
-            if i < 1:  # or key == '0_199':
-                plot_stft(output, spec_data, key)
-                plot_wave(predicted_wave, gt_wave, key)
             i += 1
 
     spec_obj.close()
     phase_obj.close()
 
-    print(f'Train points\n  Avg. MSE: {np.average(metrics["train"]["mse"])}, errors: {metrics["train"]["errors"]}')
-    print(f'Test points\n  Avg. MSE: {np.average(metrics["test"]["mse"])}, errors: {metrics["test"]["errors"]}')
+    for part in ['train', 'test']:
+        print(f'{part} points'
+              f'\n  avg. MSE for the RIRs: {np.average(metrics[part]["mse"])}'
+              f'\n  avg. MSE for the reverberant audio waveformats: {np.average(metrics[part]["mse_wav"])}'
+              f'\n  errors: {metrics[part]["errors"]}')
 
 
 if __name__ == '__main__':
@@ -240,10 +257,5 @@ if __name__ == '__main__':
     """
     originals = load_pkl('/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/rirs.pickle')
     original = originals['0-199']
-
-    # Audio test
-    fs, mono = wavfile.read('/worktmp/melandev/data/generated/rir_ambisonics_order_0_20x10/trainset/subject199/mono.wav')
-    wave_rir_out = fftconvolve(mono, predicted_wave)
-    wavfile.write(f'./out/predicted_wave.wav', fs, wave_rir_out.astype(np.int16))
     
     """
