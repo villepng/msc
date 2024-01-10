@@ -183,7 +183,7 @@ if __name__ == '__main__':
     cur_args.exp_name = exp_name_filled
     if not os.path.isdir(cur_args.save_loc):
         print('Save directory {} does not exist, creating...'.format(cur_args.save_loc))
-        os.mkdir(cur_args.save_loc)
+        os.makedirs(cur_args.save_loc)
     exp_dir = os.path.join(cur_args.save_loc, exp_name_filled)
     cur_args.exp_dir = exp_dir
     print('Experiment directory is {}'.format(exp_dir))
