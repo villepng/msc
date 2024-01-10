@@ -64,6 +64,36 @@ def load_pkl(path):
     return loaded_pkl
 
 
+def plot_stft(pred, gt, points):
+    fig, axarr = plt.subplots(1, 2)
+    fig.suptitle(f'Predicted log impulse response {points}', fontsize=16)
+    axarr[0].imshow(pred[0, 0], cmap='inferno', vmin=np.min(pred) * 1.1, vmax=np.max(pred) * 0.9)
+    axarr[0].set_title('Predicted')
+    axarr[0].axis('off')
+    axarr[1].imshow(gt[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
+    axarr[1].set_title('Ground-truth')
+    axarr[1].axis('off')
+    plt.show()
+
+
+def plot_wave(pred, gt, points, sr=16000):
+    fig, axarr = plt.subplots(3, 1)
+    fig.suptitle(f'Predicted impulse response {points}', fontsize=16)
+    axarr[0].plot(np.arange(len(pred)) / sr, pred)
+    axarr[0].set_xlim([0, 0.2])
+    axarr[0].set_ylim([None, max(gt) * 1.1])
+    axarr[0].set_title('Predicted')
+    axarr[1].plot(np.arange(len(gt)) / sr, gt)
+    axarr[1].set_xlim([0, 0.2])
+    axarr[1].set_ylim([None, max(gt) * 1.1])
+    axarr[1].set_title('Ground-truth')
+    axarr[2].plot(np.arange(len(np.subtract(pred, gt))) / sr, np.subtract(pred, gt))
+    axarr[2].set_ylim([None, max(gt) * 1.1])
+    axarr[2].set_xlim([0, 0.2])
+    axarr[2].set_title('Error')
+    plt.show()
+
+
 def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_pos, max_bbox_pos):
     selected_time = np.arange(0, max_len)
     selected_freq = np.arange(0, 256)
@@ -193,34 +223,9 @@ def main():
             else:
                 metrics[part]['errors'] += 1
 
-            # todo: plotting function?
-            if i < 1 or key == '0_199':
-                fig, axarr = plt.subplots(1, 2)
-                fig.suptitle('Predicted log impulse response', fontsize=16)
-                axarr[0].imshow(output[0, 0], cmap='inferno', vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
-                axarr[0].set_title('Predicted')
-                axarr[0].axis('off')
-                axarr[1].imshow(spec_data[0, 0], cmap='inferno', vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
-                axarr[1].set_title('Ground-truth')
-                axarr[1].axis('off')
-                plt.show()
-
-                sr = 16000
-                fig, axarr = plt.subplots(3, 1)
-                fig.suptitle(f'Predicted impulse response {key}', fontsize=16)
-                axarr[0].plot(np.arange(len(predicted_wave)) / sr, predicted_wave)
-                axarr[0].set_xlim([0, 0.2])
-                axarr[0].set_ylim([None, max(gt_wave) * 1.1])
-                axarr[0].set_title('Predicted')
-                axarr[1].plot(np.arange(len(gt_wave)) / sr, gt_wave)
-                axarr[1].set_xlim([0, 0.2])
-                axarr[1].set_ylim([None, max(gt_wave) * 1.1])
-                axarr[1].set_title('Ground-truth')
-                axarr[2].plot(np.arange(len(np.subtract(predicted_wave, gt_wave))) / sr, np.subtract(predicted_wave, gt_wave))
-                axarr[2].set_ylim([None, max(gt_wave) * 1.1])
-                axarr[2].set_xlim([0, 0.2])
-                axarr[2].set_title('Error')
-                plt.show()
+            if i < 1:  # or key == '0_199':
+                plot_stft(output, spec_data, key)
+                plot_wave(predicted_wave, gt_wave, key)
             i += 1
 
     spec_obj.close()
@@ -232,35 +237,9 @@ def main():
 
 if __name__ == '__main__':
     main()
-    """ Plotting
-    fig, axarr = plt.subplots(1, 2)
-    fig.suptitle('Predicted log impulse response', fontsize=16)
-    axarr[0].imshow(output[0, 0], cmap='inferno', vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
-    axarr[0].set_title('Predicted')
-    axarr[0].axis('off')
-    axarr[1].imshow(spec_data[0, 0], cmap='inferno', vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
-    axarr[1].set_title('Ground-truth')
-    axarr[1].axis('off')
-    plt.show()
-
-    # To wave test
-    sr = 16000  # Currently 16k for all data, training data was originally resampled
+    """
     originals = load_pkl('/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/rirs.pickle')
     original = originals['0-199']
-    predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases
-    gt_wave = to_wave_if(spec_data[0], phase_data[0])
-    fig, axarr = plt.subplots(3, 1)
-    fig.suptitle('Predicted impulse response', fontsize=16)
-    axarr[0].plot(np.arange(len(predicted_wave)) / sr, predicted_wave)
-    axarr[0].set_xlim([0, 0.2])
-    axarr[0].set_title('Predicted')
-    axarr[1].plot(np.arange(len(gt_wave)) / sr, gt_wave)
-    axarr[1].set_xlim([0, 0.2])
-    axarr[1].set_title('Ground-truth')
-    axarr[2].plot(np.arange(len(original)) / sr, original)
-    axarr[2].set_xlim([0, 0.2])
-    axarr[2].set_title('Original')
-    plt.show()
 
     # Audio test
     fs, mono = wavfile.read('/worktmp/melandev/data/generated/rir_ambisonics_order_0_20x10/trainset/subject199/mono.wav')
