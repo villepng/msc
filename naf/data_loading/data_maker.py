@@ -4,6 +4,7 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pathlib
 import pickle
 import torch
 import torchaudio
@@ -40,7 +41,7 @@ class GetSpec:
             # transformed_data = np.array([librosa.stft(wav_data[0], n_fft=self.n_fft, hop_length=self.hop),
             #                             librosa.stft(wav_data[1], n_fft=self.n_fft, hop_length=self.hop)])[:, :-1]
         #         print(np.array([librosa.stft(wav_data[0],n_fft=self.n_fft, hop_length=self.hop),
-        #                librosa.stft(wav_data[1],n_fft=self.n_fft, hop_length=self.hop)]).shape, "OLD SHAPE")
+        #                librosa.stft(wav_data[1],n_fft=self.n_fft, hop_length=self.hop)]).shape, 'OLD SHAPE')
 
         real_component = np.abs(transformed_data)
         img_component = np.angle(transformed_data)
@@ -83,7 +84,7 @@ def load_audio(path_name, use_torch=True, resample=True, resample_rate=22050):
 
     if resample:
         if wave_data_loaded.shape[1] == 0:
-            print("len 0")
+            print('len 0')
             assert False
         if wave_data_loaded.shape[1] < int(sr_loaded * 0.1):
             padded_wav = librosa.util.fix_length(wave_data_loaded, int(sr_loaded * 0.1))
@@ -101,7 +102,7 @@ def pad(input_arr, max_len_in, constant=np.log(1e-3)):
 
 def resample(wave_data, sr=16000, resample_rate=22050):
     if wave_data.shape[1] == 0:
-        print("len 0")
+        print('len 0')
         assert False
     if wave_data.shape[1] < int(sr * 0.1):
         padded_wav = librosa.util.fix_length(wave_data, size=int(sr * 0.1))
@@ -111,12 +112,16 @@ def resample(wave_data, sr=16000, resample_rate=22050):
     return np.clip(resampled_wave, -1.0, 1.0)
 
 
+# todo: a lot of cleanup
 def main():
-    sr = 16000
-    raw_path = "/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/"
-    mag_path = "/worktmp/melandev/data/naf/order_0/magnitudes"
-    phase_path = "/worktmp/melandev/data/naf/order_0/phases"
-    rooms = ["test_1"]
+    grid = '10x10'
+    raw_path = f'../../../data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_{grid}/rt60_0.2/'
+    base_path = f'../metadata/mono{grid}'
+    mag_path = f'{base_path}/magnitudes'
+    pathlib.Path(mag_path).mkdir(parents=True, exist_ok=True)
+    phase_path = f'{base_path }/phases'
+    pathlib.Path(phase_path).mkdir(parents=True, exist_ok=True)
+    rooms = ['test_1']
     max_len_dict = {}
     spec_getter = GetSpec()
     with open(f'{raw_path}/rirs.pickle', 'rb') as f:
@@ -126,15 +131,17 @@ def main():
         length_tracker = []
         mag_object = os.path.join(mag_path, room_name)
         phase_object = os.path.join(phase_path, room_name)
-        f_mag = h5py.File(mag_object + ".h5", 'w')
-        f_phase = h5py.File(phase_object + ".h5", 'w')
-        for orientation in ["0"]:  # , "90", "180", "270"]:
+        f_mag = h5py.File(mag_object + '.h5', 'w')
+        f_phase = h5py.File(phase_object + '.h5', 'w')
+        for orientation in ['0']:  # , '90', '180', '270']:
             progress = tqdm.tqdm(rirs.items())
             for coordinate, rir in progress:
                 # resampled = resample(np.clip(rir, -1.0, 1.0).T)
                 resampled = rir.T
                 real_spec, img_spec, raw_phase = spec_getter.transform(resampled)
                 length_tracker.append(real_spec.shape[2])
+
+                # sr = 16000
                 # reconstructed_wave = get_wave_if(real_spec, img_spec)
                 # fig, axes = plt.subplots(2, 1)
                 # axes[0].plot(np.arange(len(reconstructed_wave)) / sr, reconstructed_wave)  # sr depends on resampling
@@ -148,29 +155,31 @@ def main():
                 # plt.show()
                 # plt.imshow(img_spec[0])
                 # plt.show()
-                f_mag.create_dataset('{}_{}'.format(orientation, coordinate.replace("-", "_")), data=real_spec.astype(np.half))
-                f_phase.create_dataset('{}_{}'.format(orientation, coordinate.replace("-", "_")), data=img_spec.astype(np.half))
-        print("Max length {}".format(room_name), np.max(length_tracker))
+
+                f_mag.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=real_spec.astype(np.half))
+                f_phase.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=img_spec.astype(np.half))
+        print('Max length {}'.format(room_name), np.max(length_tracker))
         max_len_dict.update({room_name: np.max(length_tracker)})
         f_mag.close()
         f_phase.close()
 
     raw_path = mag_path
-    mean_std = "/worktmp/melandev/data/naf/order_0/magnitude_mean_std"
+    mean_std = f'{base_path}/mean_std'
+    pathlib.Path(mean_std).mkdir(parents=True, exist_ok=True)
     for f_name_old in sorted(list(max_len_dict.keys())):
-        f_name = f_name_old + ".h5"
-        print("Processing ", f_name)
+        f_name = f_name_old + '.h5'
+        print('Processing ', f_name)
         f = h5py.File(os.path.join(raw_path, f_name), 'r')
         keys = list(f.keys())
-        max_len = max_len_dict[f_name.split(".")[0]]
+        max_len = max_len_dict[f_name.split('.')[0]]
         all_arrs = []
         # for idx in np.random.choice(len(keys), 4000, replace=False):
         #    all_arrs.append(pad(f[keys[idx]], max_len).astype(np.single))
         for key in keys:
             all_arrs.append(pad(f[key], max_len).astype(np.single))
-        print("Computing mean")
+        print('Computing mean')
         mean_val = np.mean(all_arrs, axis=(0, 1))
-        print("Computing std")
+        print('Computing std')
         std_val = np.std(all_arrs, axis=(0, 1)) + 0.1
 
         plt.imshow(all_arrs[0][0])
@@ -183,7 +192,7 @@ def main():
         del all_arrs
         f.close()
         gc.collect()
-        with open(os.path.join(mean_std, f_name.replace("h5", "pkl")), "wb") as mean_std_file:
+        with open(os.path.join(mean_std, f_name.replace('h5', 'pkl')), 'wb') as mean_std_file:
             pickle.dump([mean_val, std_val], mean_std_file)
 
 
