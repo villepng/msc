@@ -176,7 +176,7 @@ def main():
     args = Options().parse()
     apt = args.apt
     max_len = args.max_len[apt]
-    weight_path = f'{args.save_loc}/0200_2.chkpt'
+    weight_path = f'{args.save_loc}/{apt}/0200.chkpt'
     min_max = load_pkl(f'{args.minmax_base}/{args.apt}_minmax.pkl')
     min_pos = np.array(min_max[0][0:2])  # todo: make into np.array when created originally
     max_pos = np.array(min_max[1][0:2])
@@ -225,9 +225,9 @@ def main():
                 # Calculate errors from reverberant audio generated using the RIRs
                 src, rcv = int(src), int(rcv)
                 if rcv < src:
-                    subj = src * 199 + rcv + 1  # will depend on grid size, todo: parametrize with an argument maybe
+                    subj = src * 99 + rcv + 1  # will depend on grid size, todo: parametrize with an argument maybe
                 else:
-                    subj = src * 199 + rcv
+                    subj = src * 99 + rcv
                 fs, mono = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/mono.wav')
                 fs, ambisonic = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/ambisonic.wav')
                 wave_rir_out = fftconvolve(mono, predicted_wave)
