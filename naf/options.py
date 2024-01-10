@@ -27,7 +27,7 @@ class Options:
         order = 0
         save = f'mono{grid}'  # ambisonic_1 etc. to change metadata folders faster
         parser = self.parser
-        parser.add_argument('--save_loc', default='./test_results', type=str)
+        parser.add_argument('--save_loc', default=f'./test_results/{save}', type=str)
         parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
         parser.add_argument('--exp_name', default='{}')
 
@@ -37,7 +37,7 @@ class Options:
         parser.add_argument('--phase_base', default=f'./metadata/{save}/phases', type=str)
         parser.add_argument('--mean_std_base', default=f'./metadata/{save}/mean_std', type=str)
         parser.add_argument('--minmax_base', default=f'./metadata/{save}/minmax', type=str)
-        parser.add_argument('--wav_base', default=f'../../data/generated/rir_ambisonics_order_{order}_{grid}/', type=str)
+        parser.add_argument('--wav_base', default=f'../../data/generated/rir_ambisonics_order_{order}_{grid}', type=str)
         parser.add_argument('--split_loc', default=f'./metadata/{save}/train_test_split/', type=str)
 
         # training arguments
