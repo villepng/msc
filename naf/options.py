@@ -23,19 +23,22 @@ class Options:
         self.initialized = False
 
     def initialize(self):
-        order = 'mono'  # ambisonic_1 etc. to change metadata folders faster
+        grid = '10x10'
+        order = 0
+        save = f'mono{grid}'  # ambisonic_1 etc. to change metadata folders faster
         parser = self.parser
         parser.add_argument('--save_loc', default='./test_results', type=str)
         parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
         parser.add_argument('--exp_name', default='{}')
 
         # dataset arguments
-        parser.add_argument('--coor_base', default=f'./metadata/{order}/replica', type=str)  # Location of the training index to coordinate mapping
-        parser.add_argument('--spec_base', default=f'./metadata/{order}/magnitudes', type=str)
-        parser.add_argument('--mean_std_base', default=f'./metadata/{order}/mean_std', type=str)
-        parser.add_argument('--minmax_base', default=f'./metadata/{order}/minmax', type=str)
-        parser.add_argument('--wav_base', default='/media/aluo/big2/soundspaces_full/binaural_rirs/replica', type=str)  # Location of impulses in raw .wav format, to remove?
-        parser.add_argument('--split_loc', default=f'./metadata/{order}/train_test_split/', type=str)
+        parser.add_argument('--coor_base', default=f'./metadata/{save}/replica', type=str)  # Location of the training index to coordinate mapping
+        parser.add_argument('--spec_base', default=f'./metadata/{save}/magnitudes', type=str)
+        parser.add_argument('--phase_base', default=f'./metadata/{save}/phases', type=str)
+        parser.add_argument('--mean_std_base', default=f'./metadata/{save}/mean_std', type=str)
+        parser.add_argument('--minmax_base', default=f'./metadata/{save}/minmax', type=str)
+        parser.add_argument('--wav_base', default=f'../../data/generated/rir_ambisonics_order_{order}_{grid}/', type=str)
+        parser.add_argument('--split_loc', default=f'./metadata/{save}/train_test_split/', type=str)
 
         # training arguments
         parser.add_argument('--gpus', default=1, type=int)
@@ -59,6 +62,7 @@ class Options:
         parser.add_argument('--num_freqs', default=10, type=int)  # Number of frequency for sin/cos
 
         # testing arguments
+        parser.add_argument('--wav_out', default=f'./out/{save}', type=str)
         parser.add_argument('--inference_loc', default='inference_out', type=str) # os.path.join(save_loc, inference_loc), where to cache inference results
         parser.add_argument('--gt_has_phase', default=0, type=bool_flag)  # image2reverb does not use gt phase for their GT when computing T60 error, and instead use random phase. If we use GT waveform (instead of randomizing the phase, we get lower T60 error)
         parser.add_argument('--emitter_loc', default=[1.0, 1.0], type=list_float_flag)
