@@ -158,73 +158,76 @@ def main():
     spec_obj, phase_obj, points, train_keys, test_keys = load_gt_data(args)
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
-    # Poll network at every training data point and calculate metrics against gt data
-    metrics = {'mse': [], 'spec': [], 't60': [], 'drr': [], 'errors': 0}  # todo
-    progress = tqdm.tqdm(train_keys[orientation])
-    progress.set_description('Polling network at every train data point to calculate error metrics')
-    i = 0  # for tmp sanity check
-    for key in progress:
-        full_key = f'{orientation}_{key}'
-        src, rcv = key.split('_')
-        src_pos, rcv_pos = points[src], points[rcv]
-        spec_data, phase_data = torch.from_numpy(spec_obj[full_key][:]).float(), torch.from_numpy(phase_obj[full_key][:]).float()
-        spec_data, phase_data = spec_data[:, :, :max_len], phase_data[:, :, :max_len]
-        try:
-            spec_data, phase_data = (spec_data.reshape(1, 1, 256, max_len).cpu()).numpy(), (phase_data.reshape(1, 1, 256, max_len).cpu()).numpy()
-        except:  # tmp fix
-            pass
+    # Polling the network to calculate error metrics
+    metrics = {'train': {'mse': [], 'spec': [], 't60': [], 'drr': [], 'errors': 0},
+               'test': {'mse': [], 'spec': [], 't60': [], 'drr': [], 'errors': 0}}  # todo
+    for part, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
+        progress = tqdm.tqdm(keys)
+        progress.set_description(f'Polling network to calculate error metrics at {part} data points')
+        i = 0  # for tmp sanity check
+        for key in progress:
+            full_key = f'{orientation}_{key}'
+            src, rcv = key.split('_')
+            src_pos, rcv_pos = points[src], points[rcv]
+            spec_data, phase_data = torch.from_numpy(spec_obj[full_key][:]).float(), torch.from_numpy(phase_obj[full_key][:]).float()
+            spec_data, phase_data = spec_data[:, :, :max_len], phase_data[:, :, :max_len]
+            try:
+                spec_data, phase_data = (spec_data.reshape(1, 1, 256, max_len).cpu()).numpy(), (phase_data.reshape(1, 1, 256, max_len).cpu()).numpy()
+            except:  # tmp fix
+                pass
 
-        # Poll the network
-        net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
-        network.eval()
-        with torch.no_grad():
-            output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-        # output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
-        output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
+            # Poll the network
+            net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
+            network.eval()
+            with torch.no_grad():
+                output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
+            # output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
+            output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
 
-        # Convert into time domain to calculate metrics
-        predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases
-        gt_wave = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
+            # Convert into time domain to calculate metrics
+            predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases
+            gt_wave = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
 
-        if predicted_wave is not None and gt_wave is not None:
-            metrics['mse'].append(np.square(np.subtract(predicted_wave, gt_wave)).mean())
-        else:
-            metrics['errors'] += 1
+            if predicted_wave is not None and gt_wave is not None:
+                metrics[part]['mse'].append(np.square(np.subtract(predicted_wave, gt_wave)).mean())
+            else:
+                metrics[part]['errors'] += 1
 
-        # todo: plotting function?
-        if i < 10 or key == '0_199':
-            fig, axarr = plt.subplots(1, 2)
-            fig.suptitle('Predicted log impulse response', fontsize=16)
-            axarr[0].imshow(output[0, 0], cmap='inferno', vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
-            axarr[0].set_title('Predicted')
-            axarr[0].axis('off')
-            axarr[1].imshow(spec_data[0, 0], cmap='inferno', vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
-            axarr[1].set_title('Ground-truth')
-            axarr[1].axis('off')
-            plt.show()
+            # todo: plotting function?
+            if i < 1 or key == '0_199':
+                fig, axarr = plt.subplots(1, 2)
+                fig.suptitle('Predicted log impulse response', fontsize=16)
+                axarr[0].imshow(output[0, 0], cmap='inferno', vmin=np.min(output) * 1.1, vmax=np.max(output) * 0.9)
+                axarr[0].set_title('Predicted')
+                axarr[0].axis('off')
+                axarr[1].imshow(spec_data[0, 0], cmap='inferno', vmin=np.min(spec_data) * 1.1, vmax=np.max(spec_data) * 0.9)
+                axarr[1].set_title('Ground-truth')
+                axarr[1].axis('off')
+                plt.show()
 
-            sr = 16000
-            fig, axarr = plt.subplots(3, 1)
-            fig.suptitle(f'Predicted impulse response {key}', fontsize=16)
-            axarr[0].plot(np.arange(len(predicted_wave)) / sr, predicted_wave)
-            axarr[0].set_xlim([0, 0.2])
-            axarr[0].set_ylim([None, max(gt_wave) * 1.1])
-            axarr[0].set_title('Predicted')
-            axarr[1].plot(np.arange(len(gt_wave)) / sr, gt_wave)
-            axarr[1].set_xlim([0, 0.2])
-            axarr[1].set_ylim([None, max(gt_wave) * 1.1])
-            axarr[1].set_title('Ground-truth')
-            axarr[2].plot(np.arange(len(np.subtract(predicted_wave, gt_wave))) / sr, np.subtract(predicted_wave, gt_wave))
-            axarr[2].set_ylim([None, max(gt_wave) * 1.1])
-            axarr[2].set_xlim([0, 0.2])
-            axarr[2].set_title('Error')
-            plt.show()
-        i += 1
+                sr = 16000
+                fig, axarr = plt.subplots(3, 1)
+                fig.suptitle(f'Predicted impulse response {key}', fontsize=16)
+                axarr[0].plot(np.arange(len(predicted_wave)) / sr, predicted_wave)
+                axarr[0].set_xlim([0, 0.2])
+                axarr[0].set_ylim([None, max(gt_wave) * 1.1])
+                axarr[0].set_title('Predicted')
+                axarr[1].plot(np.arange(len(gt_wave)) / sr, gt_wave)
+                axarr[1].set_xlim([0, 0.2])
+                axarr[1].set_ylim([None, max(gt_wave) * 1.1])
+                axarr[1].set_title('Ground-truth')
+                axarr[2].plot(np.arange(len(np.subtract(predicted_wave, gt_wave))) / sr, np.subtract(predicted_wave, gt_wave))
+                axarr[2].set_ylim([None, max(gt_wave) * 1.1])
+                axarr[2].set_xlim([0, 0.2])
+                axarr[2].set_title('Error')
+                plt.show()
+            i += 1
 
     spec_obj.close()
     phase_obj.close()
 
-    print(f'Avg. MSE: {np.average(metrics["mse"])}, errors: {metrics["errors"]}')
+    print(f'Train points\n  Avg. MSE: {np.average(metrics["train"]["mse"])}, errors: {metrics["train"]["errors"]}')
+    print(f'Test points\n  Avg. MSE: {np.average(metrics["test"]["mse"])}, errors: {metrics["test"]["errors"]}')
 
 
 if __name__ == '__main__':
