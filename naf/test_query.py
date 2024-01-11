@@ -42,7 +42,7 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
 
 def load_gt_data(args):
     spec_obj = h5py.File(f'{args.spec_base}/test_1.h5', 'r')
-    phase_obj = h5py.File(f'{args.spec_base}/test_1.h5', 'r')  # todo: add argument maybe
+    phase_obj = h5py.File(f'{args.phase_base}/test_1.h5', 'r')
 
     with open(f'{args.coor_base}/{args.apt}/points.txt', 'r') as f:
         lines = f.readlines()
@@ -77,9 +77,9 @@ def plot_stft(pred, gt, points):
     plt.show()
 
 
-def plot_wave(pred, gt, points, sr=16000):
+def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     fig, axarr = plt.subplots(3, 1)
-    fig.suptitle(f'Predicted impulse response {points}', fontsize=16)
+    fig.suptitle(f'Predicted vs. GT {name} between {points}', fontsize=16)
     max_len = max(np.arange(len(gt)) / sr)
     axarr[0].plot(np.arange(len(pred)) / sr, pred)
     axarr[0].set_xlim([0, max_len])
@@ -133,7 +133,7 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
 
 
 def to_wave(input_spec, mean_val=None, std_val=None, gl=False, orig_phase=None):
-    if not mean_val is None:
+    if mean_val is not None:
         renorm_input = input_spec * std_val
         renorm_input = renorm_input + mean_val
     else:
@@ -196,8 +196,7 @@ def main():
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)
         progress.set_description(f'Polling network to calculate error metrics at {train_test} data points')
-        i = 0  # for tmp sanity check
-        for key in progress:
+        for i, key in enumerate(progress):
             full_key = f'{orientation}_{key}'
             src, rcv = key.split('_')
             src_pos, rcv_pos = points[src], points[rcv]
@@ -217,7 +216,8 @@ def main():
 
             # todo: save predicted rirs in some form?
             # Convert into time domain to calculate metrics
-            predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases, todo
+            # predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases, todo
+            predicted_wave = to_wave(output[0])[0]
             gt_wave = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
             if predicted_wave is not None and gt_wave is not None:
                 metrics[train_test]['mse'].append(np.square(np.subtract(predicted_wave, gt_wave)).mean())
@@ -225,24 +225,23 @@ def main():
                 # Calculate errors from reverberant audio generated using the RIRs
                 src, rcv = int(src), int(rcv)
                 if rcv < src:
-                    subj = src * 99 + rcv + 1  # will depend on grid size, todo: parametrize with an argument maybe
+                    subj = src * 199 + rcv + 1  # will depend on grid size, todo: parametrize with an argument maybe
                 else:
-                    subj = src * 99 + rcv
+                    subj = src * 199 + rcv
                 fs, mono = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/mono.wav')
                 fs, ambisonic = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/ambisonic.wav')
                 wave_rir_out = fftconvolve(mono, predicted_wave)
                 metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
 
-                if i < 1:  # or key == '0_199':
+                if i < 1 or key == '0_199':
                     plot_stft(output, spec_data, key)
                     plot_wave(predicted_wave, gt_wave, key)
-                if i < 10:  # save reverberant audio for some of the early points
-                    plot_wave(wave_rir_out, ambisonic, key)
+                if i < 1 or key == '0_199':  # save reverberant audio for some of the early points
+                    plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                     pathlib.Path(args.wav_out).mkdir(parents=True, exist_ok=True)
                     wavfile.write(f'{args.wav_out}/pred_{key}_s{subj}.wav', fs, wave_rir_out.astype(np.int16))
             else:
                 metrics[train_test]['errors'] += 1
-            i += 1
 
     spec_obj.close()
     phase_obj.close()

@@ -22,23 +22,52 @@ class Options:
         self.parser = argparse.ArgumentParser()
         self.initialized = False
 
-    def initialize(self):
-        grid = '10x10'
-        order = 0
-        save = f'mono{grid}'  # ambisonic_1 etc. to change metadata folders faster
-        parser = self.parser
-        parser.add_argument('--save_loc', default=f'./test_results/{save}', type=str)
-        parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
-        parser.add_argument('--exp_name', default='{}')
+    def check_paths(self):
+        """
+        Create default save/dataset paths based on grid size and ambisonics order,
+        currently kind of stupid
+        """
+        if self.opt.type == 'ambisonics':
+            save = f'{self.opt.type}_{self.opt.order}{self.opt.grid}'
+        else:
+            save = f'{self.opt.type}{self.opt.grid}'
+        if self.opt.save_loc is None:
+            self.opt.save_loc = f'./test_results/{save}'
+        if self.opt.coor_base is None:
+            self.opt.coor_base = f'./metadata/{save}/replica'
+        if self.opt.spec_base is None:
+            self.opt.spec_base = f'./metadata/{save}/magnitudes'
+        if self.opt.phase_base is None:
+            self.opt.phase_base = f'./metadata/{save}/phases'
+        if self.opt.mean_std_base is None:
+            self.opt.mean_std_base = f'./metadata/{save}/mean_std'
+        if self.opt.minmax_base is None:
+            self.opt.minmax_base = f'./metadata/{save}/minmax'
+        if self.opt.wav_base is None:
+            self.opt.wav_base = f'../../data/generated/rir_ambisonics_order_{self.opt.order}_{self.opt.grid}'
+        if self.opt.split_loc is None:
+            self.opt.split_loc = f'./metadata/{save}/train_test_split/'
+        if self.opt.wav_out is None:
+            self.opt.wav_out = f'./out/{save}'
 
-        # dataset arguments
-        parser.add_argument('--coor_base', default=f'./metadata/{save}/replica', type=str)  # Location of the training index to coordinate mapping
-        parser.add_argument('--spec_base', default=f'./metadata/{save}/magnitudes', type=str)
-        parser.add_argument('--phase_base', default=f'./metadata/{save}/phases', type=str)
-        parser.add_argument('--mean_std_base', default=f'./metadata/{save}/mean_std', type=str)
-        parser.add_argument('--minmax_base', default=f'./metadata/{save}/minmax', type=str)
-        parser.add_argument('--wav_base', default=f'../../data/generated/rir_ambisonics_order_{order}_{grid}', type=str)
-        parser.add_argument('--split_loc', default=f'./metadata/{save}/train_test_split/', type=str)
+    def initialize(self):
+        parser = self.parser
+        parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
+        parser.add_argument('--grid', default='20x10', type=str)
+        parser.add_argument('--type', default='mono', choices=['mono', 'ambisonics'], type=str)
+        parser.add_argument('--order', default='0')
+        parser.add_argument('--exp_name', default='{}')
+        parser.add_argument('--save_loc', type=str)
+        parser.add_argument('--wav_out', type=str)
+
+        # dataset arguments, if not given, default ones are used (see check_paths())
+        parser.add_argument('--coor_base', type=str)  # Location of the training index to coordinate mapping
+        parser.add_argument('--spec_base', type=str)
+        parser.add_argument('--phase_base', type=str)
+        parser.add_argument('--mean_std_base', type=str)
+        parser.add_argument('--minmax_base', type=str)
+        parser.add_argument('--wav_base', type=str)
+        parser.add_argument('--split_loc', type=str)
 
         # training arguments
         parser.add_argument('--gpus', default=1, type=int)
@@ -62,7 +91,6 @@ class Options:
         parser.add_argument('--num_freqs', default=10, type=int)  # Number of frequency for sin/cos
 
         # testing arguments
-        parser.add_argument('--wav_out', default=f'./out/{save}', type=str)
         parser.add_argument('--inference_loc', default='inference_out', type=str) # os.path.join(save_loc, inference_loc), where to cache inference results
         parser.add_argument('--gt_has_phase', default=0, type=bool_flag)  # image2reverb does not use gt phase for their GT when computing T60 error, and instead use random phase. If we use GT waveform (instead of randomizing the phase, we get lower T60 error)
         parser.add_argument('--emitter_loc', default=[1.0, 1.0], type=list_float_flag)
@@ -72,6 +100,7 @@ class Options:
         if not self.initialized:
             self.initialize()
         self.opt = self.parser.parse_args()
+        self.check_paths()
         self.opt.max_len = {'test_1': 28}  # Calculated when generating the dataset
         torch.manual_seed(0)
         np.random.seed(0)
