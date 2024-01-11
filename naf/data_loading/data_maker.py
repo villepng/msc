@@ -15,6 +15,9 @@ from scipy.io import wavfile
 from skimage.transform import rescale, resize
 from torchaudio.transforms import Spectrogram
 
+from naf.options import Options
+from naf.test_query import to_wave_if
+
 
 class GetSpec:
     def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=512):
@@ -47,20 +50,6 @@ class GetSpec:
         img_component = np.angle(transformed_data)
         gen_if = if_compute(img_component) / np.pi
         return np.log(real_component + 1e-3), gen_if, img_component
-
-
-def get_wave_if(input_stft, input_if):
-    # 2 chanel input of shape [2,freq,time]
-    # First input is logged mag
-    # Second input is if divided by np.pi
-    padded_input_stft = np.concatenate((input_stft, input_stft[:, -1:]), axis=1)
-    padded_input_if = np.concatenate((input_if, input_if[:, -1:] * 0.0), axis=1)
-    unwrapped = np.cumsum(padded_input_if, axis=-1) * np.pi
-    phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
-    restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
-    wave1 = librosa.istft(restored[0], hop_length=512 // 4)
-    # wave2 = librosa.istft(restored[1], hop_length=512 // 4)  # mono
-    return wave1  # , wave2
 
 
 def if_compute(arg):
@@ -114,9 +103,8 @@ def resample(wave_data, sr=16000, resample_rate=22050):
 
 # todo: a lot of cleanup
 def main():
-    grid = '10x10'
-    raw_path = f'../../../data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_{grid}/rt60_0.2/'
-    base_path = f'../metadata/mono{grid}'
+    args = Options().parse()
+    base_path = f'../metadata/{args.type}{args.grid}'  # todo: needs order for ambisonics, should update general file structure
     mag_path = f'{base_path}/magnitudes'
     pathlib.Path(mag_path).mkdir(parents=True, exist_ok=True)
     phase_path = f'{base_path }/phases'
@@ -124,17 +112,16 @@ def main():
     rooms = ['test_1']
     max_len_dict = {}
     spec_getter = GetSpec()
-    with open(f'{raw_path}/rirs.pickle', 'rb') as f:
+    with open(f'../../../data/generated/rirs/order_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rt60_0.2/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
     for room_name in rooms:
         length_tracker = []
-        mag_object = os.path.join(mag_path, room_name)
-        phase_object = os.path.join(phase_path, room_name)
-        f_mag = h5py.File(mag_object + '.h5', 'w')
-        f_phase = h5py.File(phase_object + '.h5', 'w')
-        for orientation in ['0']:  # , '90', '180', '270']:
+        f_mag = h5py.File(f'{mag_path}/{room_name}.h5', 'w')
+        f_phase = h5py.File(f'{phase_path}/{room_name}.h5', 'w')
+        for orientation in ['0']:  # , '90', '180', '270']: might not need these
             progress = tqdm.tqdm(rirs.items())
+            progress.set_description('Calculating spectrograms')
             for coordinate, rir in progress:
                 # resampled = resample(np.clip(rir, -1.0, 1.0).T)
                 resampled = rir.T
@@ -142,7 +129,7 @@ def main():
                 length_tracker.append(real_spec.shape[2])
 
                 # sr = 16000
-                # reconstructed_wave = get_wave_if(real_spec, img_spec)
+                # reconstructed_wave = to_wave_if(real_spec, img_spec)
                 # fig, axes = plt.subplots(2, 1)
                 # axes[0].plot(np.arange(len(reconstructed_wave)) / sr, reconstructed_wave)  # sr depends on resampling
                 # axes[0].set_title('Reconstructed waveform')
@@ -167,9 +154,9 @@ def main():
     mean_std = f'{base_path}/mean_std'
     pathlib.Path(mean_std).mkdir(parents=True, exist_ok=True)
     for f_name_old in sorted(list(max_len_dict.keys())):
-        f_name = f_name_old + '.h5'
-        print('Processing ', f_name)
-        f = h5py.File(os.path.join(raw_path, f_name), 'r')
+        f_name = f'{f_name_old}.h5'
+        print(f'Processing {f_name}')
+        f = h5py.File(f'{raw_path}/{f_name}', 'r')
         keys = list(f.keys())
         max_len = max_len_dict[f_name.split('.')[0]]
         all_arrs = []
@@ -192,7 +179,7 @@ def main():
         del all_arrs
         f.close()
         gc.collect()
-        with open(os.path.join(mean_std, f_name.replace('h5', 'pkl')), 'wb') as mean_std_file:
+        with open(f'{mean_std}/{f_name.replace("h5", "pkl")}', 'wb') as mean_std_file:
             pickle.dump([mean_val, std_val], mean_std_file)
 
 

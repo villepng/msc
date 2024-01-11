@@ -53,7 +53,7 @@ class Options:
     def initialize(self):
         parser = self.parser
         parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
-        parser.add_argument('--grid', default='20x10', type=str)
+        parser.add_argument('--grid', default='10x10', type=str)
         parser.add_argument('--type', default='mono', choices=['mono', 'ambisonics'], type=str)
         parser.add_argument('--order', default='0')
         parser.add_argument('--exp_name', default='{}')
@@ -96,7 +96,6 @@ class Options:
         parser.add_argument('--emitter_loc', default=[1.0, 1.0], type=list_float_flag)
 
     def parse(self):
-        # initialize parser
         if not self.initialized:
             self.initialize()
         self.opt = self.parser.parse_args()
