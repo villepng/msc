@@ -174,6 +174,7 @@ def parse_input_args():
     parser = argparse.ArgumentParser(description='Create reverberant audio dataset encoded into ambisonics with specified order')
     parser.add_argument('-d', '--dataset_path', default='data/timit', type=str, help='path to TIMIT dataset from current parent folder')  # todo: make paths "normal" (?)
     parser.add_argument('-s', '--save_path', default='data/generated', type=str, help='path (from current parent folder) where to save the generated dataset, will be saved in a folder named based on the ambisonics order')
+    parser.add_argument('-n', '--naf_path', default='msc/naf/metadata', type=str, help='path (from current parent folder) where to save additional naf metadata')
     parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))  # 20 cm min distance between points
     parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: give delta instead of points?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
@@ -233,14 +234,16 @@ def write_coordinate_metadata(grid: np.array, room: list, save_path: str) -> Non
     :param save_path: path to save the text file
     :return:
     """
-    if not pathlib.Path(save_path).exists():
-        pathlib.Path(save_path).mkdir(parents=True)
-    if pathlib.Path(f'{save_path}/points.txt').is_file():
-        pathlib.Path(f'{save_path}/points.txt').unlink()
-    with open(f'{save_path}/points.txt', 'a+') as f:
+    paths = [f'{save_path}/replica/test_1', f'{save_path}/minmax']  # todo: room name parameter
+    for path in paths:
+        if not pathlib.Path(path).exists():
+            pathlib.Path(path).mkdir(parents=True)
+    if pathlib.Path(f'{paths[0]}/points.txt').is_file():
+        pathlib.Path(f'{paths[0]}/points.txt').unlink()
+    with open(f'{paths[0]}/points.txt', 'a+') as f:
         for i, point in enumerate(grid):
             f.write(f'{i} {point[0]} {point[1]} 1.5\n')
-    with open(f'{save_path}/minmax.pkl', 'wb') as f:
+    with open(f'{paths[1]}/minmax.pkl', 'wb') as f:
         pickle.dump((np.array([0.0, 0.0, 0.0]), np.array(room)), f)
 
 
@@ -251,6 +254,9 @@ def write_split_metadata(grid: np.array, save_path: str) -> None:  # todo: inclu
     :param save_path: path to save the pickle file
     :return:
     """
+    save_path = f'{save_path}/train_test_split'
+    if not pathlib.Path(save_path).exists():
+        pathlib.Path(save_path).mkdir(parents=True)
     points = grid.shape[0]
     data = []
     for i in range(points):
@@ -276,9 +282,9 @@ def main():
     # Get dataset and save paths, load existing RIRs if possible
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
-    save_path = f'{parent_dir}/{args.save_path}/rir_ambisonics_order_{args.order}_{args.grid[0]}x{args.grid[1]}'
-    rir_path = f'{parent_dir}/{args.save_path}/rirs/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
-    metadata_path = f'{parent_dir}/{args.save_path}/metadata/order_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}'
+    save_path = f'{parent_dir}/{args.save_path}/ambisonics_{args.order}_{args.grid[0]}x{args.grid[1]}'
+    rir_path = f'{parent_dir}/{args.save_path}/rirs/ambisonics_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
+    metadata_path = f'{parent_dir}/{args.naf_path}/ambisonics_{args.order}_{args.grid[0]}x{args.grid[1]}'
 
     if pathlib.Path(f'{rir_path}/rirs.pickle').is_file():
         answer = input(f'Existing RIR file found at \'{rir_path}\', use stored RIRs for faster generation (y/n)? ')

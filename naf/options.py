@@ -27,10 +27,8 @@ class Options:
         Create default save/dataset paths based on grid size and ambisonics order,
         currently kind of stupid
         """
-        if self.opt.type == 'ambisonics':
-            save = f'{self.opt.type}_{self.opt.order}{self.opt.grid}'
-        else:
-            save = f'{self.opt.type}{self.opt.grid}'
+        save = f'ambisonics_{self.opt.order}_{self.opt.grid}'
+        
         if self.opt.save_loc is None:
             self.opt.save_loc = f'./test_results/{save}'
         if self.opt.coor_base is None:
@@ -44,7 +42,7 @@ class Options:
         if self.opt.minmax_base is None:
             self.opt.minmax_base = f'./metadata/{save}/minmax'
         if self.opt.wav_base is None:
-            self.opt.wav_base = f'../../data/generated/rir_ambisonics_order_{self.opt.order}_{self.opt.grid}'
+            self.opt.wav_base = f'../../data/generated/ambisonics_{self.opt.order}_{self.opt.grid}'
         if self.opt.split_loc is None:
             self.opt.split_loc = f'./metadata/{save}/train_test_split/'
         if self.opt.wav_out is None:
@@ -54,7 +52,6 @@ class Options:
         parser = self.parser
         parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
         parser.add_argument('--grid', default='10x10', type=str)
-        parser.add_argument('--type', default='mono', choices=['mono', 'ambisonics'], type=str)
         parser.add_argument('--order', default='0')
         parser.add_argument('--exp_name', default='{}')
         parser.add_argument('--save_loc', type=str)
