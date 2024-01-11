@@ -11,13 +11,9 @@ import tqdm
 from scipy.io import wavfile
 from scipy.signal import fftconvolve
 
-from model.modules import EmbeddingModuleLog
-from model.networks import KernelResidualFCEmbeds
-from options import Options
-
-'''
-    Code from https://github.com/aluo-x/Learning_Neural_Acoustic_Fields
-'''
+from naf.model.modules import EmbeddingModuleLog
+from naf.model.networks import KernelResidualFCEmbeds
+from naf.options import Options
 
 
 def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device):
