@@ -74,15 +74,15 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
         order = args.order
         rm_delay = args.rm_delay
 
-    rt60 = np.array([rt60])
+    rt60 = np.array([rt60])  # [0.4, 0.4, 0.15, 0.15, 0.2, 0.4]
     components = (order + 1) ** 2
     nBands = 6
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)  # basic absorption
-    abs_wall = np.array([MATERIALS['glass'], MATERIALS['glass'], MATERIALS['fiberglass'],
-                         MATERIALS['fiberglass'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
-    #abs_wall = np.array([MATERIALS['glass'], MATERIALS['glass'], MATERIALS['glass'],
-    #                     MATERIALS['glass'], MATERIALS['fiberglass'], MATERIALS['fiberglass']])
+    abs_wall = np.array([MATERIALS['glass'], MATERIALS['glass'], MATERIALS['drapery'],
+                         MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
+    abs_wall = np.array([MATERIALS['fiberglass'], MATERIALS['fiberglass'], MATERIALS['fiberglass'],
+                         MATERIALS['fiberglass'], MATERIALS['carpet'], MATERIALS['carpet']])
     
     # tmp = srs.room_stats(room, abs_wall)
 
