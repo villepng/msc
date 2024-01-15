@@ -189,8 +189,8 @@ def main():
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
     # Polling the network to calculate error metrics
-    error_metrics = {'train': {'mse': [], 'mse_wav': [], 'spec': [], 'rt60': [], 'drr': [], 'errors': 0},
-                     'test': {'mse': [], 'mse_wav': [], 'spec': [], 'rt60': [], 'drr': [], 'errors': 0}}  # todo
+    error_metrics = {'train': {'mse': [], 'mse_wav': [], 'spec': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0},
+                     'test': {'mse': [], 'mse_wav': [], 'spec': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0}}
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)
         progress.set_description(f'Polling network to calculate error metrics at {train_test} data points')
@@ -214,10 +214,10 @@ def main():
 
             # todo: save predicted rirs in some form?
             # Convert into time domain to calculate metrics
-            # predicted_wave = to_wave_if(output[0], phase_data[0])  # using original phases, todo
-            predicted_wave = to_wave(output[0])[0]
-            gt_wave = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
-            if predicted_wave is not None and gt_wave is not None:
+            # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases, todo
+            predicted_rir = to_wave(output[0])[0]
+            gt_rir = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
+            if predicted_rir is not None and gt_rir is not None:
                 # Convert from src and rcv points into 'subjects' in the original dataset format
                 src, rcv = int(src), int(rcv)
                 if rcv < src:
@@ -226,21 +226,29 @@ def main():
                     subj = src * 199 + rcv
                 fs, mono = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/mono.wav')
                 fs, ambisonic = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/ambisonic.wav')
-                wave_rir_out = fftconvolve(mono, predicted_wave)  # todo: normalize?
+                wave_rir_out = fftconvolve(mono, predicted_rir)  # todo: normalize?
 
                 # Calculate error metrics
-                error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_wave, gt_wave)).mean())
+                error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
                 error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
-                edc, edc_db = metrics.get_edc(predicted_wave)
+                _, edc_db = metrics.get_edc(predicted_rir)
                 rt60_pred = metrics.get_rt_from_edc(edc_db, fs)
-                edc, edc_db = metrics.get_edc(gt_wave)
+                _, edc_db = metrics.get_edc(gt_rir)
                 rt60_gt = metrics.get_rt_from_edc(edc_db, fs)
                 error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+
+                delay = metrics.get_delay(src_pos, rcv_pos)
+                drr_pred = metrics.get_drr(predicted_rir, delay)
+                drr_gt = metrics.get_drr(gt_rir, delay)
+                error_metrics[train_test]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
+                c50_pred = metrics.get_c50(predicted_rir, delay)
+                c50_gt = metrics.get_c50(gt_rir, delay)
+                error_metrics[train_test]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
 
                 # Plot some examples
                 if i < 1 or key == '0_199':
                     plot_stft(output, spec_data, key)
-                    plot_wave(predicted_wave, gt_wave, key)
+                    plot_wave(predicted_rir, gt_rir, key)
                 if i < 1 or key == '0_199':  # save reverberant audio for some of the early points
                     plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                     pathlib.Path(args.wav_out).mkdir(parents=True, exist_ok=True)
