@@ -41,8 +41,8 @@ def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.arr
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = None, 
-                          room: np.array = None, rt60: float = None, order: int = None, rm_delay: bool = None, 
+def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = None,
+                          room: np.array = None, rt60: float = None, order: int = None, rm_delay: bool = None,
                           args: argparse.Namespace = None, test_set: bool = False) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated.
@@ -79,16 +79,19 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     nBands = 6
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)  # basic absorption
-    abs_wall = np.array([MATERIALS['glass'], MATERIALS['glass'], MATERIALS['drapery'],
-                         MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
+    # abs_wall = np.array([MATERIALS['glass'], MATERIALS['glass'], MATERIALS['drapery'],
+    #                     MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
     abs_wall = np.array([MATERIALS['fiberglass'], MATERIALS['fiberglass'], MATERIALS['fiberglass'],
                          MATERIALS['fiberglass'], MATERIALS['carpet'], MATERIALS['carpet']])
-    
+
     # tmp = srs.room_stats(room, abs_wall)
 
     audio_index = 0
     data_index = 0
+    minmax = [np.inf, -np.inf]
+    reverberant_signals = {}
     progress = tqdm.tqdm(enumerate(points))  # todo: pathlib seems to not work well with eta, possible fixes?
+    # First loop to generate RIRs and reverberant audio, then normalize before saving the actual wav files
     for i, src_pos in progress:
         progress.set_description(f'Calculating RIRs for each other point at grid point: {i + 1}/{len(points)}')
         for j, recv_pos in enumerate(points):
@@ -117,7 +120,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                 sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
                 RIRS.update({f'{i}-{j}': sh_rirs})
 
-            # Apply RIRs and save signals & metadata
+            # Apply RIRs, check min/max for normalization and store metadata, currently mono is not normalized as it's only used for listening
             subject = data_index + 1
             audio_length = len(audio_anechoic)
             reverberant_signal = np.zeros((audio_length, components))
@@ -129,7 +132,10 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                     reverberant_signal[:, k] = np.roll(reverberant_signal[:, k], -delay_samples)
                     with open(f'{save_path}/subject{subject}/delays.txt', 'a') as delay_f:
                         delay_f.write(f'{delay_samples}\n')
-            wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
+            if np.min(reverberant_signal) < minmax[0]: minmax[0] = np.min(reverberant_signal)
+            if np.max(reverberant_signal) > minmax[1]: minmax[1] = np.max(reverberant_signal)
+            reverberant_signals.update({f'{i}-{j}': reverberant_signal})
+            # wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
                              fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}')
 
@@ -137,6 +143,14 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             data_index += 1
             if audio_index == len(audio_paths):  # go through all audio snippets using different one for each data point and start over if needed
                 audio_index = 0
+
+    # Normalize and save reverberant audio, todo: simplify and remove unneeded stuff
+    subject = 1
+    for rir_points, reverberant_signal in reverberant_signals.items():
+        for k in range(components):
+            reverberant_signal[:, k] = normalize(reverberant_signal[:, k], minmax[0], minmax[1])
+        wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.float32))  # float32 when between -1.0 and 1.0, could add extra check for fs
+        subject += 1
 
 
 def get_audio_paths(path: str) -> np.array:
@@ -168,6 +182,24 @@ def get_sn3d_norm_coefficients(order: int) -> list:
             sn3d.append(1. / np.sqrt(root))
         i += 1
     return sn3d
+
+
+def normalize(data: np.array, min_data: float, max_data: float, min_norm: float = -1.0, max_norm: float = 1.0) -> np.array:
+    """ Normalize the data between min_norm and max_norm based on min_data and max_data
+
+    :param min_data: minimum of the whole dataset (not just 'data')
+    :param max_data: maximum of the whole dataset (not just 'data')
+    :param data: array (1d) to normalize
+    :param min_norm: minimum value of normalized data
+    :param max_norm: maximum value of normalized data
+    :return: normalized numpy array
+    """
+    data_norm = []
+    diff = max_norm - min_norm
+    diff_data = max_data - min_data
+    for value in data:
+        data_norm.append((((value - min_data) * diff) / diff_data) + min_norm)
+    return np.array(data_norm)
 
 
 def parse_input_args():
@@ -312,7 +344,7 @@ def main():
     audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
     # grid = create_grid(np.array([8, 4]), args.wall_gap, np.array(args.room))  # todo: generate testset differently (smaller, different points?)
     generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, args=args)
-    
+
     # Save calculated RIRs
     if not args.skip_rir_write:  # might technically need even more specific file names
         if not pathlib.Path(rir_path).exists():
