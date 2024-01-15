@@ -111,7 +111,7 @@ def main():
     rooms = ['test_1']
     max_len_dict = {}
     spec_getter = GetSpec()
-    with open(f'../../../data/generated/rirs/order_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rt60_0.2/rirs.pickle', 'rb') as f:
+    with open(f'../../../data/generated/rirs/order_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
     for room_name in rooms:

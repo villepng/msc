@@ -84,7 +84,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     abs_wall = np.array([MATERIALS['fiberglass'], MATERIALS['fiberglass'], MATERIALS['fiberglass'],
                          MATERIALS['fiberglass'], MATERIALS['carpet'], MATERIALS['carpet']])
 
-    # tmp = srs.room_stats(room, abs_wall)
+    rt60, _, _ = srs.room_stats(room, abs_wall, False)
 
     audio_index = 0
     data_index = 0
@@ -110,9 +110,10 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             if f'{i}-{j}' in RIRS:
                 sh_rirs = RIRS[f'{i}-{j}']
             else:
-                maxlim = 1.5  # just stop if the echogram goes beyond that time (or just set it to max(rt60))
-                limits = np.empty(nBands)
-                limits.fill(np.minimum(rt60[0], maxlim))
+                maxlim = 0.8  # 0.8, 1s
+                limits = rt60  # todo: compare with maxlim, although not really needed in practice
+                #limits = np.empty(nBands)
+                #limits.fill(np.minimum(rt60, maxlim))
                 abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
                 sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
                 if order == 0:
@@ -195,10 +196,12 @@ def normalize(data: np.array, min_data: float, max_data: float, min_norm: float 
     :return: normalized numpy array
     """
     data_norm = []
+    max_data = max(abs(min_data), abs(max_data))
     diff = max_norm - min_norm
     diff_data = max_data - min_data
     for value in data:
-        data_norm.append((((value - min_data) * diff) / diff_data) + min_norm)
+        # data_norm.append((((value - min_data) * diff) / diff_data) + min_norm)
+        data_norm.append(value / max_data)
     return np.array(data_norm)
 
 
@@ -315,7 +318,7 @@ def main():
     parent_dir = str(pathlib.Path.cwd().parent)
     audio_data_path = f'{parent_dir}/{args.dataset_path}'
     save_path = f'{parent_dir}/{args.save_path}/ambisonics_{args.order}_{args.grid[0]}x{args.grid[1]}'
-    rir_path = f'{parent_dir}/{args.save_path}/rirs/ambisonics_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/rt60_{args.rt60}'
+    rir_path = f'{parent_dir}/{args.save_path}/rirs/ambisonics_{args.order}/room_{args.room[0]}x{args.room[1]}x{args.room[2]}/grid_{args.grid[0]}x{args.grid[1]}/'
     metadata_path = f'{parent_dir}/{args.naf_path}/ambisonics_{args.order}_{args.grid[0]}x{args.grid[1]}'
 
     if pathlib.Path(f'{rir_path}/rirs.pickle').is_file():
@@ -349,8 +352,8 @@ def main():
     if not args.skip_rir_write:  # might technically need even more specific file names
         if not pathlib.Path(rir_path).exists():
             pathlib.Path(rir_path).mkdir(parents=True)
-            with open(f'{rir_path}/rirs.pickle', 'wb') as f:
-                pickle.dump(RIRS, f)
+        with open(f'{rir_path}/rirs.pickle', 'wb') as f:
+            pickle.dump(RIRS, f)
 
 
 if __name__ == '__main__':
