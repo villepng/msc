@@ -166,7 +166,8 @@ def train_net(rank, world_size, freeport, args):
             par_idx += 1
         if rank == 0:
             avg_loss = total_losses.item() / cur_iter
-            print(f'\n  Ending epoch {epoch} for room \'{args.exp_name}\', avg. loss {avg_loss:.6f}')
+            if epoch % 10 == 0:
+                print(f'\n  Ending epoch {epoch} for room \'{args.exp_name}\', avg. loss {avg_loss:.6f}')
         if rank == 0 and (epoch % 20 == 0 or epoch == 1 or epoch > (args.epochs - 3)):
             save_name = str(epoch).zfill(4) + '.chkpt'
             save_dict = {'network': ddp_auditory_net.module.state_dict()}

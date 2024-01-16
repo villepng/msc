@@ -176,8 +176,7 @@ def main():
     max_len = args.max_len[apt]
     weight_path = f'{args.save_loc}/{apt}/0200.chkpt'
     min_max = load_pkl(f'{args.minmax_base}/{args.apt}_minmax.pkl')
-    min_pos = np.array(min_max[0][0:2])  # todo: make into np.array when created originally
-    max_pos = np.array(min_max[1][0:2])
+    min_pos, max_pos = np.array(min_max[0][0:2]), np.array(min_max[1][0:2])
     output_device = 0
     orientation = 0
 
@@ -237,7 +236,7 @@ def main():
                 rt60_gt = metrics.get_rt_from_edc(edc_db, fs)
                 error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
 
-                delay = metrics.get_delay(src_pos, rcv_pos)
+                delay = metrics.get_delay_samples(src_pos, rcv_pos)
                 drr_pred = metrics.get_drr(predicted_rir, delay)
                 drr_gt = metrics.get_drr(gt_rir, delay)
                 error_metrics[train_test]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
@@ -265,6 +264,8 @@ def main():
         print(f'{train_test} points'
               f'\n  avg. MSE for the RIRs: {np.average(error_metrics[train_test]["mse"])}'
               f'\n  avg. RT60 error for the RIRs: {np.average(error_metrics[train_test]["rt60"])}'
+              f'\n  avg. DRR error for the RIRs: {np.average(error_metrics[train_test]["drr"])}'
+              f'\n  avg. C50 error for the RIRs: {np.average(error_metrics[train_test]["c50"])}'
               f'\n  avg. MSE for the reverberant audio waveformats: {np.average(error_metrics[train_test]["mse_wav"])}'
               f'\n  errors: {error_metrics[train_test]["errors"]}')
 
