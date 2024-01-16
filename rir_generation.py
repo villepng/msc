@@ -344,9 +344,9 @@ def main():
     # Create dataset divided into trainset and testset
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
     generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, args=args)
-    audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
+    # audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
     # grid = create_grid(np.array([8, 4]), args.wall_gap, np.array(args.room))  # todo: generate testset differently (smaller, different points?)
-    generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, args=args)
+    # generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, args=args)
 
     # Save calculated RIRs
     if not args.skip_rir_write:  # might technically need even more specific file names
