@@ -44,7 +44,7 @@ def load_gt_data(args):
 
     with open(f'{args.coor_base}/{args.apt}/points.txt', 'r') as f:
         lines = f.readlines()
-    points = [x.replace('\n', "").split(' ') for x in lines]
+    points = [x.replace('\n', '').split(' ') for x in lines]
     positions = dict()
     for row in points:
         readout = [float(xyz) for xyz in row[1:]]
@@ -81,14 +81,14 @@ def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     max_len = max(np.arange(len(gt)) / sr)
     axarr[0].plot(np.arange(len(pred)) / sr, pred)
     axarr[0].set_xlim([0, max_len])
-    axarr[0].set_ylim([None, max(gt) * 1.1])
+    # axarr[0].set_ylim([None, max(gt) * 1.1])
     axarr[0].set_title('Predicted')
     axarr[1].plot(np.arange(len(gt)) / sr, gt)
     axarr[1].set_xlim([0, max_len])
     axarr[1].set_ylim([None, max(gt) * 1.1])
     axarr[1].set_title('Ground-truth')
     axarr[2].plot(np.arange(len(np.subtract(pred[:len(gt)], gt))) / sr, np.subtract(pred[:len(gt)], gt))
-    axarr[2].set_ylim([None, max(gt) * 1.1])
+    # axarr[2].set_ylim([None, max(gt) * 1.1])
     axarr[2].set_xlim([0, max_len])
     axarr[2].set_title('Error')
     plt.show()
@@ -259,8 +259,6 @@ def main():
     phase_obj.close()
 
     for train_test in ['train', 'test']:
-        t = error_metrics[train_test]["rt60"]
-        k = sum(t) / len(t)
         print(f'{train_test} points'
               f'\n  avg. MSE for the RIRs: {np.average(error_metrics[train_test]["mse"])}'
               f'\n  avg. RT60 error for the RIRs: {np.average(error_metrics[train_test]["rt60"])}'

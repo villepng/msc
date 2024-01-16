@@ -131,10 +131,10 @@ def main():
                 # reconstructed_wave = to_wave_if(real_spec, img_spec)
                 # fig, axes = plt.subplots(2, 1)
                 # axes[0].plot(np.arange(len(reconstructed_wave)) / sr, reconstructed_wave)  # sr depends on resampling
-                # axes[0].set_title('Reconstructed waveform')
+                # axes[0].set_title(f'Reconstructed waveform {coordinate}')
                 # axes[0].set_xlim([0, 0.2])
                 # axes[1].plot(np.arange(len(rir)) / sr, rir)
-                # axes[1].set_title('Original waveform')
+                # axes[1].set_title(f'Original waveform {coordinate}')
                 # axes[1].set_xlim([0, 0.2])
                 # plt.show()
                 # plt.imshow(real_spec[0])
