@@ -1,5 +1,6 @@
 import argparse
 import csv
+import matplotlib.pyplot as plt
 import numpy as np
 import pathlib
 import pickle
@@ -74,7 +75,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
         order = args.order
         rm_delay = args.rm_delay
 
-    rt60 = np.array([rt60])  # [0.4, 0.4, 0.15, 0.15, 0.2, 0.4]
+    # rt60 = np.array([rt60])  # [0.4, 0.4, 0.15, 0.15, 0.2, 0.4]
     components = (order + 1) ** 2
     nBands = 6
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
@@ -112,8 +113,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             else:
                 maxlim = 0.8  # 0.8, 1s
                 limits = rt60  # todo: compare with maxlim, although not really needed in practice
-                #limits = np.empty(nBands)
-                #limits.fill(np.minimum(rt60, maxlim))
+                # limits = np.empty(nBands)
+                # limits.fill(np.minimum(rt60, maxlim))
                 abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
                 sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
                 if order == 0:
@@ -127,12 +128,15 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             reverberant_signal = np.zeros((audio_length, components))
             pathlib.Path(f'{save_path}/subject{subject}').mkdir(parents=True)
             wavfile.write(f'{save_path}/subject{subject}/mono.wav', fs, audio_anechoic.astype(np.int16))
+            # t = np.arange(len(sh_rirs[:, 0])) / fs
             for k in range(components):
+                # plt.plot(t, sh_rirs[:, k])
                 reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
                 if rm_delay:
                     reverberant_signal[:, k] = np.roll(reverberant_signal[:, k], -delay_samples)
                     with open(f'{save_path}/subject{subject}/delays.txt', 'a') as delay_f:
                         delay_f.write(f'{delay_samples}\n')
+            # plt.show()
             if np.min(reverberant_signal) < minmax[0]: minmax[0] = np.min(reverberant_signal)
             if np.max(reverberant_signal) > minmax[1]: minmax[1] = np.max(reverberant_signal)
             reverberant_signals.update({f'{i}-{j}': reverberant_signal})
