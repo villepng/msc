@@ -269,7 +269,7 @@ def write_coordinate_metadata(grid: np.array, room: list, save_path: str) -> Non
     :param save_path: path to save the text file
     :return:
     """
-    paths = [f'{save_path}/replica/test_1', f'{save_path}/minmax']  # todo: room name parameter
+    paths = [f'{save_path}/replica/test_1', f'{save_path}/minmax']
     for path in paths:
         if not pathlib.Path(path).exists():
             pathlib.Path(path).mkdir(parents=True)
@@ -278,7 +278,7 @@ def write_coordinate_metadata(grid: np.array, room: list, save_path: str) -> Non
     with open(f'{paths[0]}/points.txt', 'a+') as f:
         for i, point in enumerate(grid):
             f.write(f'{i} {point[0]} {point[1]} 1.5\n')
-    with open(f'{paths[1]}/minmax.pkl', 'wb') as f:
+    with open(f'{paths[1]}/test_1_minmax.pkl', 'wb') as f:  # todo: room name parameter
         pickle.dump((np.array([0.0, 0.0, 0.0]), np.array(room)), f)
 
 
