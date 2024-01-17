@@ -93,7 +93,7 @@ def train_net(rank, world_size, freeport, args):
                     load_opt = 1
                 dist.barrier()
         if loaded_weights is False:
-            print('Resume indicated, but no weights found!')
+            print('Resume indicated, but no weights found')
             dist.barrier()
             dist.destroy_process_group()
             exit()

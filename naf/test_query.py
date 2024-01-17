@@ -133,17 +133,17 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
     return auditory_net
 
 
-def print_errors(metrics):
+def print_errors(error_metrics):
     for train_test in ['train', 'test']:
         print(f'{train_test} points'
-              f'\n  avg. MSE for the RIRs: {np.average(metrics[train_test]["mse"])}'
-              f'\n  avg. spectral error for the RIRs: {np.average(metrics[train_test]["spec"])}'
-              f'\n  avg. RT60 error for the RIRs: {np.average(metrics[train_test]["rt60"])}'
-              f'\n  avg. DRR error for the RIRs: {np.average(metrics[train_test]["drr"])}'
-              f'\n  avg. C50 error for the RIRs: {np.average(metrics[train_test]["c50"])}'
-              f'\n  avg. MSE for the reverberant audio waveformats: {np.average(metrics[train_test]["mse_wav"])}')
-        if len(metrics[train_test]["errors"]) > 0:
-            print(f'  errors: {metrics[train_test]["errors"]}')
+              f'\n  avg. MSE for the RIRs: {np.average(error_metrics[train_test]["mse"])}'
+              f'\n  avg. MSE for the RIR magnitude spectrograms: {np.average(error_metrics[train_test]["spec_mse"])}'
+              f'\n  avg. RT60 error for the RIRs: {np.average(error_metrics[train_test]["rt60"])}'
+              f'\n  avg. DRR error for the RIRs: {np.average(error_metrics[train_test]["drr"])}'
+              f'\n  avg. C50 error for the RIRs: {np.average(error_metrics[train_test]["c50"])}'
+              f'\n  avg. MSE for the reverberant audio waveformats: {np.average(error_metrics[train_test]["mse_wav"])}')
+        if len(error_metrics[train_test]["errors"]) > 0:
+            print(f'  errors: {error_metrics[train_test]["errors"]}')
 
 
 def test_model(args):
@@ -163,8 +163,8 @@ def test_model(args):
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
     # Polling the network to calculate error metrics
-    error_metrics = {'train': {'mse': [], 'mse_wav': [], 'spec': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0},
-                     'test': {'mse': [], 'mse_wav': [], 'spec': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0}}
+    error_metrics = {'train': {'mse': [], 'mse_wav': [], 'spec_mse': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0},
+                     'test': {'mse': [], 'mse_wav': [], 'spec_mse': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0}}
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)
         progress.set_description(f'Polling network to calculate error metrics at {train_test} data points')
@@ -186,7 +186,6 @@ def test_model(args):
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
             output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
 
-            # todo: save predicted rirs in some form?
             # Convert into time domain to calculate metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
             predicted_rir = to_wave(output[0])[0]
@@ -204,7 +203,8 @@ def test_model(args):
 
                 # Calculate error metrics
                 error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
-                error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
+                error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
+                # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())  # todo: needs normalization, store gt dataset max value?
                 _, edc_db_pred = metrics.get_edc(predicted_rir)
                 rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                 _, edc_db_gt = metrics.get_edc(gt_rir)

@@ -20,6 +20,7 @@ def listdir(path):
 
 class Soundsamples(torch.utils.data.Dataset):
     def __init__(self, arg_stuff):
+        print('Starting dataset caching')
         coor_base = arg_stuff.coor_base
         spec_base = arg_stuff.spec_base
         mean_std_base = arg_stuff.mean_std_base
@@ -32,31 +33,25 @@ class Soundsamples(torch.utils.data.Dataset):
         self.max_len = max_len[room_name]
         full_path = os.path.join(spec_base, room_name+'.h5')
 
-        print('Caching the room coordinate indices, this will take a while....')
-        # See https://discuss.pytorch.org/t/dataloader-when-num-worker-0-there-is-bug/25643
         self.sound_data = []
         self.sound_data = h5py.File(full_path, 'r')
         self.sound_keys = list(self.sound_data.keys())
         self.sound_data.close()
-        print('Completed room coordinate index caching')
         self.sound_data = None
         self.full_path = full_path
 
-        files = [(mykey.split('_')[0], '_'.join(mykey.split('_')[1:])) for mykey in self.sound_keys]
         self.sound_files = {'0': [], '90': [], '180': [], '270': []}
         self.sound_files_test = {'0': [], '90': [], '180': [], '270': []}
 
         train_test_split_path = os.path.join(arg_stuff.split_loc, arg_stuff.apt + '_complete.pkl')
         with open(train_test_split_path, 'rb') as train_test_file_obj:
             train_test_split = pickle.load(train_test_file_obj)
-        # use train test split
 
         self.sound_files = train_test_split[0]
         self.sound_files_test = train_test_split[1]
 
         with open(os.path.join(mean_std_base, room_name+'.pkl'), 'rb') as mean_std_ff:
             mean_std = pickle.load(mean_std_ff)
-            print('Loaded mean std')
         self.mean = torch.from_numpy(mean_std[0]).float()[None]
         self.std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
 
@@ -81,6 +76,7 @@ class Soundsamples(torch.utils.data.Dataset):
         # values = np.array(list(self.positions.values()))
         self.num_samples = num_samples
         self.pos_reg_amt = arg_stuff.reg_eps
+        print('Finished dataset caching')
 
     def __len__(self):
         # return number of samples for a SINGLE orientation
