@@ -75,22 +75,25 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
         order = args.order
         rm_delay = args.rm_delay
 
-    # rt60 = np.array([rt60])  # [0.4, 0.4, 0.15, 0.15, 0.2, 0.4]
     components = (order + 1) ** 2
-    nBands = 6
+    # nBands = 1
+    # band_centerfreqs = np.empty(nBands)
+    # band_centerfreqs[0] = 1000
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
-    # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)  # basic absorption
-    # abs_wall = np.array([MATERIALS['glass'], MATERIALS['glass'], MATERIALS['drapery'],
-    #                     MATERIALS['drapery'], MATERIALS['carpet'], MATERIALS['plaster']])  # define as x, y, z walls
+    # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # basic absorption
     abs_wall = np.array([MATERIALS['fiberglass'], MATERIALS['fiberglass'], MATERIALS['fiberglass'],
                          MATERIALS['fiberglass'], MATERIALS['carpet'], MATERIALS['carpet']])
-
+    # rt60 = np.array([rt60])
     rt60, _, _ = srs.room_stats(room, abs_wall, False)
+    maxlim = 0.8  # 0.8, 1s
+    # limits = np.empty(nBands)
+    # limits.fill(np.minimum(rt60[0], maxlim))
+    limits = rt60  # todo: compare with maxlim, although not really needed in practice
 
     audio_index = 0
     data_index = 0
     minmax = [np.inf, -np.inf]
-    reverberant_signals = {}
+    reverberant_signals = {}  # todo: this needs to be periodically pickled or something due to memory issues
     progress = tqdm.tqdm(enumerate(points))  # todo: pathlib seems to not work well with eta, possible fixes?
     # First loop to generate RIRs and reverberant audio, then normalize before saving the actual wav files
     for i, src_pos in progress:
@@ -111,10 +114,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             if f'{i}-{j}' in RIRS:
                 sh_rirs = RIRS[f'{i}-{j}']
             else:
-                maxlim = 0.8  # 0.8, 1s
-                limits = rt60  # todo: compare with maxlim, although not really needed in practice
-                # limits = np.empty(nBands)
-                # limits.fill(np.minimum(rt60, maxlim))
                 abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
                 sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
                 if order == 0:
