@@ -9,9 +9,7 @@ import torch
 import torchaudio
 import tqdm
 
-from scipy.interpolate import interp1d
 from scipy.io import wavfile
-from skimage.transform import rescale, resize
 from torchaudio.transforms import Spectrogram
 
 from naf.options import Options
@@ -24,7 +22,7 @@ class GetSpec:
         self.n_fft = fft_size
         self.hop = self.n_fft // 4
         if use_torch:
-            assert False
+            assert False  # not sure why the structure is like this but currently it doesn't matter
             self.use_torch = True
             self.spec_transform = Spectrogram(power=None, n_fft=self.n_fft, hop_length=self.hop)
         else:
@@ -42,8 +40,6 @@ class GetSpec:
             transformed_data = np.array([librosa.stft(wav_data[0], n_fft=self.n_fft, hop_length=self.hop)])[:, :-1]  # mono
             # transformed_data = np.array([librosa.stft(wav_data[0], n_fft=self.n_fft, hop_length=self.hop),
             #                             librosa.stft(wav_data[1], n_fft=self.n_fft, hop_length=self.hop)])[:, :-1]
-        #         print(np.array([librosa.stft(wav_data[0],n_fft=self.n_fft, hop_length=self.hop),
-        #                librosa.stft(wav_data[1],n_fft=self.n_fft, hop_length=self.hop)]).shape, 'OLD SHAPE')
 
         real_component = np.abs(transformed_data)
         img_component = np.angle(transformed_data)
@@ -56,7 +52,6 @@ def if_compute(arg):
     return np.concatenate([unwrapped_angle[:, :, 0:1], np.diff(unwrapped_angle, n=1)], axis=-1)
 
 
-# Misc. functions to make spectrograms
 def load_audio(path_name, use_torch=True, resample=True, resample_rate=22050):
     # returns in shape (ch, num_sample), as float32 (on Linux at least)
     # by default torchaudio is wav_arr, sample_rate
@@ -71,14 +66,7 @@ def load_audio(path_name, use_torch=True, resample=True, resample_rate=22050):
         sr_loaded = loaded[0]
 
     if resample:
-        if wave_data_loaded.shape[1] == 0:
-            print('len 0')
-            assert False
-        if wave_data_loaded.shape[1] < int(sr_loaded * 0.1):
-            padded_wav = librosa.util.fix_length(wave_data_loaded, int(sr_loaded * 0.1))
-            resampled_wave = librosa.resample(padded_wav, orig_sr=sr_loaded, target_sr=resample_rate)
-        else:
-            resampled_wave = librosa.resample(wave_data_loaded, orig_sr=sr_loaded, target_sr=resample_rate)
+        resampled_wave = resample_data(wave_data_loaded, sr_loaded, resample_rate)
     else:
         resampled_wave = wave_data_loaded
     return np.clip(resampled_wave, -1.0, 1.0)
@@ -88,7 +76,7 @@ def pad(input_arr, max_len_in, constant=np.log(1e-3)):
     return np.pad(input_arr, [[0, 0], [0, 0], [0, max_len_in - input_arr.shape[2]]], constant_values=constant)
 
 
-def resample(wave_data, sr=16000, resample_rate=22050):
+def resample_data(wave_data, sr=16000, resample_rate=22050):
     if wave_data.shape[1] == 0:
         print('len 0')
         assert False
@@ -100,7 +88,6 @@ def resample(wave_data, sr=16000, resample_rate=22050):
     return np.clip(resampled_wave, -1.0, 1.0)
 
 
-# todo: a lot of cleanup
 def main():
     args = Options().parse()
     base_path = f'../metadata/ambisonics_{args.order}_{args.grid}'
@@ -118,7 +105,7 @@ def main():
         length_tracker = []
         f_mag = h5py.File(f'{mag_path}/{room_name}.h5', 'w')
         f_phase = h5py.File(f'{phase_path}/{room_name}.h5', 'w')
-        for orientation in ['0']:  # , '90', '180', '270']: might not need these
+        for orientation in ['0']:
             progress = tqdm.tqdm(rirs.items())
             progress.set_description('Calculating spectrograms')
             for coordinate, rir in progress:
@@ -159,22 +146,22 @@ def main():
         keys = list(f.keys())
         max_len = max_len_dict[f_name.split('.')[0]]
         all_arrs = []
-        # for idx in np.random.choice(len(keys), 4000, replace=False):
-        #    all_arrs.append(pad(f[keys[idx]], max_len).astype(np.single))
         for key in keys:
-            all_arrs.append(pad(f[key], max_len).astype(np.single))
+            all_arrs.append(pad(f[key], max_len).astype(np.single))  # Originally only 4000 are randomly selected for mean and std calculation
         print('Computing mean')
         mean_val = np.mean(all_arrs, axis=(0, 1))
         print('Computing std')
         std_val = np.std(all_arrs, axis=(0, 1)) + 0.1
 
         plt.imshow(all_arrs[0][0])
+        plt.title('Example spectrum')
         plt.show()
         plt.imshow(mean_val)
+        plt.title('Mean')
         plt.show()
         plt.imshow(std_val)
+        plt.title('STD')
         plt.show()
-        print(mean_val.shape)
         del all_arrs
         f.close()
         gc.collect()
