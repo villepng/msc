@@ -88,9 +88,8 @@ class Options:
         parser.add_argument('--num_freqs', default=10, type=int)  # Number of frequency for sin/cos
 
         # testing arguments
-        parser.add_argument('--inference_loc', default='inference_out', type=str) # os.path.join(save_loc, inference_loc), where to cache inference results
+        parser.add_argument('--inference_loc', default='inference_out', type=str)  # todo
         parser.add_argument('--gt_has_phase', default=0, type=bool_flag)  # image2reverb does not use gt phase for their GT when computing T60 error, and instead use random phase. If we use GT waveform (instead of randomizing the phase, we get lower T60 error)
-        parser.add_argument('--emitter_loc', default=[1.0, 1.0], type=list_float_flag)
 
     def parse(self):
         if not self.initialized:
@@ -98,6 +97,7 @@ class Options:
         self.opt = self.parser.parse_args()
         self.check_paths()
         self.opt.max_len = {'test_1': 29}  # Calculated when generating the dataset
+        self.opt.subj_offset = int(self.opt.grid.split('x')[0]) * int(self.opt.grid.split('x')[1]) - 1  # Offset to convert between 'subjects' and points, see test_query.py before error metric calculation
         torch.manual_seed(0)
         np.random.seed(0)
         args = vars(self.opt)

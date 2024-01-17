@@ -213,16 +213,16 @@ def main():
 
             # todo: save predicted rirs in some form?
             # Convert into time domain to calculate metrics
-            # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases, todo
+            # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
             predicted_rir = to_wave(output[0])[0]
             gt_rir = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
             if predicted_rir is not None and gt_rir is not None:
                 # Convert from src and rcv points into 'subjects' in the original dataset format
                 src, rcv = int(src), int(rcv)
                 if rcv < src:
-                    subj = src * 199 + rcv + 1  # will depend on grid size, todo: parametrize with an argument maybe
+                    subj = src * args.subj_offset + rcv + 1
                 else:
-                    subj = src * 199 + rcv
+                    subj = src * args.subj_offset + rcv
                 fs, mono = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/mono.wav')
                 fs, ambisonic = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/ambisonic.wav')
                 wave_rir_out = fftconvolve(mono, predicted_rir)  # todo: normalize?
@@ -268,6 +268,7 @@ def main():
     for train_test in ['train', 'test']:
         print(f'{train_test} points'
               f'\n  avg. MSE for the RIRs: {np.average(error_metrics[train_test]["mse"])}'
+              f'\n  avg. spectral error for the RIRs: {np.average(error_metrics[train_test]["spec"])}'
               f'\n  avg. RT60 error for the RIRs: {np.average(error_metrics[train_test]["rt60"])}'
               f'\n  avg. DRR error for the RIRs: {np.average(error_metrics[train_test]["drr"])}'
               f'\n  avg. C50 error for the RIRs: {np.average(error_metrics[train_test]["c50"])}'
