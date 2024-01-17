@@ -12,14 +12,12 @@ def bool_flag(s):
     raise ValueError(msg % s)
 
 
-def list_float_flag(s):
-    return [float(_) for _ in list(s)]
-
-
 class Options:
     def __init__(self):
         self.opt = None
-        self.parser = argparse.ArgumentParser()
+        self.parser = argparse.ArgumentParser(description='Parameters for various scripts related to NAFs, if paths are'
+                                                          ' not given, default values for them are generated based on'
+                                                          ' the ambisonics order used and grid size')
         self.initialized = False
 
     def check_paths(self):
@@ -47,6 +45,8 @@ class Options:
             self.opt.split_loc = f'./metadata/{save}/train_test_split/'
         if self.opt.wav_out is None:
             self.opt.wav_out = f'./out/{save}'
+        if self.opt.inference_loc is None:
+            self.opt.wav_out = f'./out/{save}/inference'
 
     def initialize(self):
         parser = self.parser
@@ -78,8 +78,8 @@ class Options:
 
         # network arguments
         parser.add_argument('--layers', default=8, type=int)  # Number of layers in the network
-        parser.add_argument('--grid_gap', default=0.25, type=float)  # How far are the grid points spaced
-        parser.add_argument('--bandwith_init', default=0.25, type=float)  # Initial bandwidth of the grid
+        parser.add_argument('--grid_gap', default=0.4, type=float)  # How far are the grid points spaced
+        parser.add_argument('--bandwith_init', default=0.4, type=float)  # Initial bandwidth of the grid
         parser.add_argument('--features', default=512, type=int)  # Number of neurons in the network for each layer
         parser.add_argument('--grid_features', default=64, type=int)  # Number of neurons in the grid
         parser.add_argument('--position_float', default=0.1, type=float)  # Amount the position of each grid cell can float (up or down)
@@ -88,7 +88,8 @@ class Options:
         parser.add_argument('--num_freqs', default=10, type=int)  # Number of frequency for sin/cos
 
         # testing arguments
-        parser.add_argument('--inference_loc', default='inference_out', type=str)  # todo
+        parser.add_argument('--inference_loc', type=str)
+        parser.add_argument('--recalculate_errors', default=0, type=bool_flag)
         parser.add_argument('--gt_has_phase', default=0, type=bool_flag)  # image2reverb does not use gt phase for their GT when computing T60 error, and instead use random phase. If we use GT waveform (instead of randomizing the phase, we get lower T60 error)
 
     def parse(self):
