@@ -93,7 +93,7 @@ def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     axarr[2].plot(np.arange(len(np.subtract(pred[:len(gt)], gt))) / sr, np.subtract(pred[:len(gt)], gt))
     # axarr[2].set_ylim([None, max(gt) * 1.1])
     axarr[2].set_xlim([0, max_len])
-    axarr[2].set_title('Error')
+    axarr[2].set_title('Error (predictions are not normalized, so this is not really useful at the moment)')
     plt.show()
 
 
@@ -140,8 +140,9 @@ def print_errors(error_metrics):
               f'\n  avg. MSE for the RIR magnitude spectrograms: {np.average(error_metrics[train_test]["spec_mse"])}'
               f'\n  avg. RT60 error for the RIRs: {np.average(error_metrics[train_test]["rt60"])}'
               f'\n  avg. DRR error for the RIRs: {np.average(error_metrics[train_test]["drr"])}'
-              f'\n  avg. C50 error for the RIRs: {np.average(error_metrics[train_test]["c50"])}'
-              f'\n  avg. MSE for the reverberant audio waveformats: {np.average(error_metrics[train_test]["mse_wav"])}')
+              f'\n  avg. C50 error for the RIRs: {np.average(error_metrics[train_test]["c50"])}')
+        if len(error_metrics[train_test]["mse_wav"]):
+            print(f'\n  avg. MSE for the reverberant audio waveformats: {np.average(error_metrics[train_test]["mse_wav"])}')
         if len(error_metrics[train_test]["errors"]) > 0:
             print(f'  errors: {error_metrics[train_test]["errors"]}')
 
@@ -186,7 +187,7 @@ def test_model(args):
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
             output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
 
-            # Convert into time domain to calculate metrics
+            # Convert into time domain to calculate most metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
             predicted_rir = to_wave(output[0])[0]
             gt_rir = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter

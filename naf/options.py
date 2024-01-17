@@ -15,9 +15,8 @@ def bool_flag(s):
 class Options:
     def __init__(self):
         self.opt = None
-        self.parser = argparse.ArgumentParser(description='Parameters for various scripts related to NAFs, if paths are'
-                                                          ' not given, default values for them are generated based on'
-                                                          ' the ambisonics order used and grid size')
+        self.parser = argparse.ArgumentParser(description='Parameters for various scripts related to NAFs, if paths are not given, '
+                                                          'default values for them are generated based on the ambisonics order and grid size')
         self.initialized = False
 
     def check_paths(self):
@@ -58,7 +57,7 @@ class Options:
         parser.add_argument('--wav_out', type=str)
 
         # dataset arguments, if not given, default ones are used (see check_paths())
-        parser.add_argument('--coor_base', type=str)  # Location of the training index to coordinate mapping
+        parser.add_argument('--coor_base', type=str, help='location of the training index to coordinate mapping')
         parser.add_argument('--spec_base', type=str)
         parser.add_argument('--phase_base', type=str)
         parser.add_argument('--mean_std_base', type=str)
@@ -69,27 +68,28 @@ class Options:
         # training arguments
         parser.add_argument('--gpus', default=1, type=int)
         parser.add_argument('--epochs', default=200, type=int)
-        parser.add_argument('--resume', default=0, type=bool_flag)  # Load weights or not from latest checkpoint
+        parser.add_argument('--resume', default=0, type=bool_flag, help='load weights or not from latest checkpoint')
         parser.add_argument('--batch_size', default=20, type=int)
-        parser.add_argument('--reg_eps', default=1e-1, type=float)  # Noise to regularize positions
-        parser.add_argument('--pixel_count', default=2000, type=int)  # Noise to regularize positions
-        parser.add_argument('--lr_init', default=5e-4, type=float)  # Starting learning rate
-        parser.add_argument('--lr_decay', default=1e-1, type=float)  # Learning rate decay rate
+        parser.add_argument('--reg_eps', default=1e-1, type=float, help='noise to regularize positions')
+        parser.add_argument('--pixel_count', default=2000, type=int, help='noise to regularize positions')
+        parser.add_argument('--lr_init', default=5e-4, type=float, help='starting learning rate')
+        parser.add_argument('--lr_decay', default=1e-1, type=float, help='learning rate decay rate')
 
         # network arguments
-        parser.add_argument('--layers', default=8, type=int)  # Number of layers in the network
-        parser.add_argument('--grid_gap', default=0.4, type=float)  # How far are the grid points spaced
-        parser.add_argument('--bandwith_init', default=0.4, type=float)  # Initial bandwidth of the grid
-        parser.add_argument('--features', default=512, type=int)  # Number of neurons in the network for each layer
-        parser.add_argument('--grid_features', default=64, type=int)  # Number of neurons in the grid
-        parser.add_argument('--position_float', default=0.1, type=float)  # Amount the position of each grid cell can float (up or down)
-        parser.add_argument('--min_bandwidth', default=0.1, type=float)  # Minimum bandwidth for clipping
-        parser.add_argument('--max_bandwidth', default=0.5, type=float)  # Maximum bandwidth for clipping
-        parser.add_argument('--num_freqs', default=10, type=int)  # Number of frequency for sin/cos
+        parser.add_argument('--layers', default=8, type=int, help='number of layers in the network')
+        parser.add_argument('--grid_gap', default=0.4, type=float, help='how far are the grid points spaced')
+        parser.add_argument('--bandwith_init', default=0.4, type=float, help='initial bandwidth of the grid')
+        parser.add_argument('--features', default=512, type=int, help='number of neurons in the network for each layer')
+        parser.add_argument('--grid_features', default=64, type=int, help='number of neurons in the grid')
+        parser.add_argument('--position_float', default=0.1, type=float, help='amount the position of each grid cell can float (up or down)')
+        parser.add_argument('--min_bandwidth', default=0.1, type=float, help='minimum bandwidth for clipping')
+        parser.add_argument('--max_bandwidth', default=0.5, type=float, help='maximum bandwidth for clipping')
+        parser.add_argument('--num_freqs', default=10, type=int, help='number of frequency for sin/cos')
 
         # testing arguments
         parser.add_argument('--inference_loc', type=str)
         parser.add_argument('--recalculate_errors', default=0, type=bool_flag)
+        parser.add_argument('--test_points', nargs='*', default=['0_199'], help='point pairs \'src_rcv\' where to save predicted audio and plot data')
         parser.add_argument('--gt_has_phase', default=0, type=bool_flag)  # image2reverb does not use gt phase for their GT when computing T60 error, and instead use random phase. If we use GT waveform (instead of randomizing the phase, we get lower T60 error)
 
     def parse(self):
