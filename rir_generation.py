@@ -5,6 +5,8 @@ import numpy as np
 import pathlib
 import pickle
 import sys
+
+import pylab as pl
 import tqdm
 
 from masp import shoebox_room_sim as srs
@@ -116,6 +118,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             else:
                 abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
                 sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
+                sh_rirs = np.roll(sh_rirs, -500, axis=0)  # Remove delay from filtering, not needed with basic absorption
                 if order == 0:
                     sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
                 sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
