@@ -220,8 +220,8 @@ def test_model(args):
                 c50_gt = metrics.get_c50(gt_rir, delay)
                 error_metrics[train_test]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
 
-                # Plot some examples
-                if i < 1 or key == '0_199':
+                # Plot some examples for confirming the results
+                if i < 1:
                     plot_stft(output, spec_data, key)
                     plot_wave(predicted_rir, gt_rir, key)
                     # t = np.arange(len(edc_db_gt)) / fs
@@ -231,17 +231,18 @@ def test_model(args):
                     # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
                     # plt.legend()
                     # plt.show()
-                if i < 1 or key == '0_199':  # save reverberant audio for some of the early points
-                    plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
-                    pathlib.Path(args.wav_out).mkdir(parents=True, exist_ok=True)
-                    wavfile.write(f'{args.wav_out}/pred_{key}_s{subj}.wav', fs, wave_rir_out.astype(np.int16))
+                if key in args.test_points:
+                    # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
+                    pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
+                    wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, wave_rir_out.astype(np.int16))
             else:
                 error_metrics[train_test]['errors'] += 1
 
     spec_obj.close()
     phase_obj.close()
     print_errors(error_metrics)
-    with open(f'{args.inference_loc}/errors.pkl', 'wb') as f:
+    pathlib.Path(args.metric_loc).mkdir(parents=True, exist_ok=True)
+    with open(f'{args.metric_loc}/errors.pkl', 'wb') as f:
         pickle.dump(error_metrics, f)
 
 
@@ -287,8 +288,8 @@ def to_wave_if(input_stft, input_if):
 
 if __name__ == '__main__':
     options = Options().parse()
-    if pathlib.Path(f'{options.inference_loc}/errors.pkl').is_file() and not options.recalculate_errors:
-        with open(f'{options.inference_loc}/errors.pkl', 'rb') as f:
+    if pathlib.Path(f'{options.metric_loc}/errors.pkl').is_file() and not options.recalculate_errors:
+        with open(f'{options.metric_loc}/errors.pkl', 'rb') as f:
             print_errors(pickle.load(f))
         # todo: add parameters to test the model with just few points if error metrics are already calculated
     else:

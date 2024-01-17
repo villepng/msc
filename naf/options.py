@@ -42,10 +42,10 @@ class Options:
             self.opt.wav_base = f'../../data/generated/{save}'
         if self.opt.split_loc is None:
             self.opt.split_loc = f'./metadata/{save}/train_test_split/'
-        if self.opt.wav_out is None:
-            self.opt.wav_out = f'./out/{save}'
-        if self.opt.inference_loc is None:
-            self.opt.wav_out = f'./out/{save}/inference'
+        if self.opt.wav_loc is None:
+            self.opt.wav_loc = f'./out/{save}/wav'
+        if self.opt.metric_loc is None:
+            self.opt.metric_loc = f'./out/{save}/metrics'
 
     def initialize(self):
         parser = self.parser
@@ -54,7 +54,6 @@ class Options:
         parser.add_argument('--order', default='0')
         parser.add_argument('--exp_name', default='{}')
         parser.add_argument('--save_loc', type=str)
-        parser.add_argument('--wav_out', type=str)
 
         # dataset arguments, if not given, default ones are used (see check_paths())
         parser.add_argument('--coor_base', type=str, help='location of the training index to coordinate mapping')
@@ -87,9 +86,10 @@ class Options:
         parser.add_argument('--num_freqs', default=10, type=int, help='number of frequency for sin/cos')
 
         # testing arguments
-        parser.add_argument('--inference_loc', type=str)
+        parser.add_argument('--wav_loc', type=str, help='where to save predicted audio data if test points are given')
+        parser.add_argument('--metric_loc', type=str, help='where to save/load error metrics')
         parser.add_argument('--recalculate_errors', default=0, type=bool_flag)
-        parser.add_argument('--test_points', nargs='*', default=['0_199'], help='point pairs \'src_rcv\' where to save predicted audio and plot data')
+        parser.add_argument('--test_points', nargs='*', default=['0_199'], help='point pairs \'src_rcv\' where to save predicted audio data')
         parser.add_argument('--gt_has_phase', default=0, type=bool_flag)  # image2reverb does not use gt phase for their GT when computing T60 error, and instead use random phase. If we use GT waveform (instead of randomizing the phase, we get lower T60 error)
 
     def parse(self):
