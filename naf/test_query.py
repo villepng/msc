@@ -64,14 +64,17 @@ def load_pkl(path):
 
 
 def plot_stft(pred, gt, points):
-    fig, axarr = plt.subplots(1, 2)
+    fig, axarr = plt.subplots(1, 3)
     fig.suptitle(f'Predicted log impulse response {points}', fontsize=16)
-    axarr[0].imshow(pred[0, 0], cmap='inferno', vmin=np.min(pred) * 1.1, vmax=np.max(pred) * 0.9)
+    axarr[0].imshow(pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
     axarr[0].set_title('Predicted')
     axarr[0].axis('off')
     axarr[1].imshow(gt[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
     axarr[1].set_title('Ground-truth')
     axarr[1].axis('off')
+    axarr[2].imshow(gt[0, 0] - pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
+    axarr[2].set_title('Ground-truth')
+    axarr[2].axis('off')
     plt.show()
 
 
@@ -130,48 +133,20 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
     return auditory_net
 
 
-def to_wave(input_spec, mean_val=None, std_val=None, gl=False, orig_phase=None):
-    if mean_val is not None:
-        renorm_input = input_spec * std_val
-        renorm_input = renorm_input + mean_val
-    else:
-        renorm_input = input_spec + 0.0
-    renorm_input = np.exp(renorm_input) - 1e-3
-    renorm_input = np.clip(renorm_input, 0.0, 100000.0)
-    if orig_phase is None:
-        if gl is False:
-            # Random phase reconstruction per image2reverb
-            np.random.seed(1234)
-            rp = np.random.uniform(-np.pi, np.pi, renorm_input.shape)
-            f = renorm_input * (np.cos(rp) + (1.j * np.sin(rp)))
-            out_wave = librosa.istft(f, hop_length=128)
-        else:
-            out_wave = librosa.griffinlim(renorm_input, hop_length=128, n_iter=40, momentum=0.5, random_state=64)
-    else:
-        f = renorm_input * (np.cos(orig_phase) + (1.j * np.sin(orig_phase)))
-        out_wave = librosa.istft(f, win_length=400, hop_length=200)
-    return out_wave
+def print_errors(metrics):
+    for train_test in ['train', 'test']:
+        print(f'{train_test} points'
+              f'\n  avg. MSE for the RIRs: {np.average(metrics[train_test]["mse"])}'
+              f'\n  avg. spectral error for the RIRs: {np.average(metrics[train_test]["spec"])}'
+              f'\n  avg. RT60 error for the RIRs: {np.average(metrics[train_test]["rt60"])}'
+              f'\n  avg. DRR error for the RIRs: {np.average(metrics[train_test]["drr"])}'
+              f'\n  avg. C50 error for the RIRs: {np.average(metrics[train_test]["c50"])}'
+              f'\n  avg. MSE for the reverberant audio waveformats: {np.average(metrics[train_test]["mse_wav"])}')
+        if len(metrics[train_test]["errors"]) > 0:
+            print(f'  errors: {metrics[train_test]["errors"]}')
 
 
-def to_wave_if(input_stft, input_if):
-    # 2 chanel input of shape [2,freq,time]
-    # First input is logged mag
-    # Second input is if divided by np.pi
-    padded_input_stft = np.concatenate((input_stft, input_stft[:, -1:]), axis=1)
-    padded_input_if = np.concatenate((input_if, input_if[:, -1:] * 0.0), axis=1)
-    unwrapped = np.cumsum(padded_input_if, axis=-1) * np.pi
-    phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
-    try:
-        restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
-        wave1 = librosa.istft(restored[0], hop_length=512 // 4)
-        # wave2 = librosa.istft(restored[1], hop_length=512 // 4)  # mono
-        return wave1  # , wave2
-    except:  # todo: proper fix in main
-        return None
-
-
-def main():
-    args = Options().parse()
+def test_model(args):
     apt = args.apt
     max_len = args.max_len[apt]
     weight_path = f'{args.save_loc}/{apt}/0200.chkpt'
@@ -264,21 +239,62 @@ def main():
 
     spec_obj.close()
     phase_obj.close()
+    print_errors(error_metrics)
+    with open(f'{args.inference_loc}/errors.pkl', 'wb') as f:
+        pickle.dump(error_metrics, f)
 
-    for train_test in ['train', 'test']:
-        print(f'{train_test} points'
-              f'\n  avg. MSE for the RIRs: {np.average(error_metrics[train_test]["mse"])}'
-              f'\n  avg. spectral error for the RIRs: {np.average(error_metrics[train_test]["spec"])}'
-              f'\n  avg. RT60 error for the RIRs: {np.average(error_metrics[train_test]["rt60"])}'
-              f'\n  avg. DRR error for the RIRs: {np.average(error_metrics[train_test]["drr"])}'
-              f'\n  avg. C50 error for the RIRs: {np.average(error_metrics[train_test]["c50"])}'
-              f'\n  avg. MSE for the reverberant audio waveformats: {np.average(error_metrics[train_test]["mse_wav"])}'
-              f'\n  errors: {error_metrics[train_test]["errors"]}')
+
+def to_wave(input_spec, mean_val=None, std_val=None, gl=False, orig_phase=None):
+    if mean_val is not None:
+        renorm_input = input_spec * std_val
+        renorm_input = renorm_input + mean_val
+    else:
+        renorm_input = input_spec + 0.0
+    renorm_input = np.exp(renorm_input) - 1e-3
+    renorm_input = np.clip(renorm_input, 0.0, 100000.0)
+    if orig_phase is None:
+        if gl is False:
+            # Random phase reconstruction per image2reverb
+            np.random.seed(1234)
+            rp = np.random.uniform(-np.pi, np.pi, renorm_input.shape)
+            f = renorm_input * (np.cos(rp) + (1.j * np.sin(rp)))
+            out_wave = librosa.istft(f, hop_length=128)
+        else:
+            out_wave = librosa.griffinlim(renorm_input, hop_length=128, n_iter=40, momentum=0.5, random_state=64)
+    else:
+        f = renorm_input * (np.cos(orig_phase) + (1.j * np.sin(orig_phase)))
+        out_wave = librosa.istft(f, win_length=400, hop_length=200)
+    return out_wave
+
+
+def to_wave_if(input_stft, input_if):
+    # 2 chanel input of shape [2,freq,time]
+    # First input is logged mag
+    # Second input is if divided by np.pi
+    padded_input_stft = np.concatenate((input_stft, input_stft[:, -1:]), axis=1)
+    padded_input_if = np.concatenate((input_if, input_if[:, -1:] * 0.0), axis=1)
+    unwrapped = np.cumsum(padded_input_if, axis=-1) * np.pi
+    phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
+    try:
+        restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
+        wave1 = librosa.istft(restored[0], hop_length=512 // 4)
+        # wave2 = librosa.istft(restored[1], hop_length=512 // 4)  # mono
+        return wave1  # , wave2
+    except:  # todo: proper fix in main
+        return None
 
 
 if __name__ == '__main__':
-    main()
+    options = Options().parse()
+    if pathlib.Path(f'{options.inference_loc}/errors.pkl').is_file() and not options.recalculate_errors:
+        with open(f'{options.inference_loc}/errors.pkl', 'rb') as f:
+            print_errors(pickle.load(f))
+        # todo: add parameters to test the model with just few points if error metrics are already calculated
+    else:
+        test_model(options)
+
     """
+    # Where original RIR waveforms are stored and in which format
     originals = load_pkl('/worktmp/melandev/data/generated/rirs/order_0/room_10.0x6.0x2.5/grid_20x10/rt60_0.2/rirs.pickle')
     original = originals['0-199']
     
