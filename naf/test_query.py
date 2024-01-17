@@ -230,10 +230,10 @@ def main():
                 # Calculate error metrics
                 error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
                 error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
-                _, edc_db = metrics.get_edc(predicted_rir)
-                rt60_pred = metrics.get_rt_from_edc(edc_db, fs)
-                _, edc_db = metrics.get_edc(gt_rir)
-                rt60_gt = metrics.get_rt_from_edc(edc_db, fs)
+                _, edc_db_pred = metrics.get_edc(predicted_rir)
+                rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
+                _, edc_db_gt = metrics.get_edc(gt_rir)
+                rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
                 error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
 
                 delay = metrics.get_delay_samples(src_pos, rcv_pos)
@@ -248,6 +248,13 @@ def main():
                 if i < 1 or key == '0_199':
                     plot_stft(output, spec_data, key)
                     plot_wave(predicted_rir, gt_rir, key)
+                    # t = np.arange(len(edc_db_gt)) / fs
+                    # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
+                    # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
+                    # plt.plot(t, np.ones(np.size(t)) * -60)
+                    # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
+                    # plt.legend()
+                    # plt.show()
                 if i < 1 or key == '0_199':  # save reverberant audio for some of the early points
                     plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                     pathlib.Path(args.wav_out).mkdir(parents=True, exist_ok=True)
