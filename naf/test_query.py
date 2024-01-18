@@ -148,7 +148,7 @@ def print_errors(error_metrics):
             print(f'  errors: {error_metrics[train_test]["errors"]}')
 
 
-def test_model(args):
+def test_model(args, test_points=None, write_errors=True):
     apt = args.apt
     max_len = args.max_len[apt]
     weight_path = f'{args.save_loc}/{apt}/0200.chkpt'
@@ -162,6 +162,9 @@ def test_model(args):
     mean = torch.from_numpy(mean_std[0]).float()[None]
     std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
     spec_obj, phase_obj, points, train_keys, test_keys = load_gt_data(args)
+    if test_points is not None:
+        train_keys[orientation] = []
+        test_keys[orientation] = test_points
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
     # Polling the network to calculate error metrics
@@ -208,9 +211,9 @@ def test_model(args):
                 error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
                 # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
                 _, edc_db_pred = metrics.get_edc(predicted_rir)
-                rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
+                rt60_pred= metrics.get_rt_from_edc(edc_db_pred, fs)
                 _, edc_db_gt = metrics.get_edc(gt_rir)
-                rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
+                rt60_gt= metrics.get_rt_from_edc(edc_db_gt, fs)
                 error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
 
                 delay = metrics.get_delay_samples(src_pos, rcv_pos)
@@ -220,6 +223,16 @@ def test_model(args):
                 c50_pred = metrics.get_c50(predicted_rir, delay)
                 c50_gt = metrics.get_c50(gt_rir, delay)
                 error_metrics[train_test]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
+
+                # t = np.arange(len(edc_db_gt)) / fs
+                # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
+                # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
+                # plt.plot(t, np.ones(np.size(t)) * -60)
+                # plt.scatter(rt60_pred, -60, label='Predicted RT60')
+                # plt.scatter(rt60_gt, -60, label='GT RT60')
+                # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
+                # plt.legend()
+                # plt.show()
 
                 # Plot some examples for checking the results
                 if i < 1:
@@ -243,10 +256,11 @@ def test_model(args):
 
     spec_obj.close()
     phase_obj.close()
-    print_errors(error_metrics)
-    pathlib.Path(args.metric_loc).mkdir(parents=True, exist_ok=True)
-    with open(f'{args.metric_loc}/errors.pkl', 'wb') as f:
-        pickle.dump(error_metrics, f)
+    if write_errors:
+        print_errors(error_metrics)
+        pathlib.Path(args.metric_loc).mkdir(parents=True, exist_ok=True)
+        with open(f'{args.metric_loc}/errors.pkl', 'wb') as f:
+            pickle.dump(error_metrics, f)
 
 
 def to_wave(input_spec, mean_val=None, std_val=None, gl=False, orig_phase=None):
@@ -291,10 +305,13 @@ def to_wave_if(input_stft, input_if):
 
 if __name__ == '__main__':
     options = Options().parse()
-    if pathlib.Path(f'{options.metric_loc}/errors.pkl').is_file() and not options.recalculate_errors:
-        with open(f'{options.metric_loc}/errors.pkl', 'rb') as f:
-            print_errors(pickle.load(f))
-        # todo: add parameters to test the model with just few points if error metrics are already calculated
+    if options.test_points is not None and not options.recalculate_errors:
+        print('Querying model at the wanted points for plotting and audio generation')
+        test_model(options, options.test_points, False)
+        if pathlib.Path(f'{options.metric_loc}/errors.pkl').is_file():
+            print('Loaded total errors from previous full run:')
+            with open(f'{options.metric_loc}/errors.pkl', 'rb') as f:
+                print_errors(pickle.load(f))
     else:
         test_model(options)
 

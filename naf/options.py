@@ -88,8 +88,8 @@ class Options:
         # testing arguments
         parser.add_argument('--wav_loc', type=str, help='where to save predicted audio data if test points are given')
         parser.add_argument('--metric_loc', type=str, help='where to save/load error metrics')
-        parser.add_argument('--recalculate_errors', default=1, type=bool_flag)
-        parser.add_argument('--test_points', nargs='*', default=['0_21', '0_89', '0_199'], help='point pairs \'src_rcv\' where to save predicted audio data')
+        parser.add_argument('--recalculate_errors', default=1, type=bool_flag, help='calculate error metrics from the full dataset, if inactive, only polls the model at the test points')
+        parser.add_argument('--test_points', nargs='*', default=['0_21', '0_89', '0_199'], help='point pairs \'src_rcv\' where to save and plot predicted audio data, if empty, nothing is saved and full errors are calculated')
         parser.add_argument('--gt_has_phase', default=0, type=bool_flag)  # image2reverb does not use gt phase for their GT when computing T60 error, and instead use random phase. If we use GT waveform (instead of randomizing the phase, we get lower T60 error)
 
     def parse(self):
