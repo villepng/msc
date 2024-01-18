@@ -93,7 +93,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     audio_index = 0
     data_index = 0
     minmax = [np.inf, -np.inf]
-    reverberant_signals = {}  # todo: this needs to be periodically pickled or something due to memory issues
     progress = tqdm.tqdm(enumerate(points))  # todo: pathlib seems to not work well with eta, possible fixes?
     # First loop to generate RIRs and reverberant audio, then normalize before saving the actual wav files
     for i, src_pos in progress:
@@ -139,8 +138,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # plt.show()
             if np.min(reverberant_signal) < minmax[0]: minmax[0] = np.min(reverberant_signal)
             if np.max(reverberant_signal) > minmax[1]: minmax[1] = np.max(reverberant_signal)
-            reverberant_signals.update({f'{i}-{j}': reverberant_signal})
-            # wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
+            # Temporarily store non-normalized reverberant audio
+            wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
                              fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}')
 
@@ -149,13 +148,24 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             if audio_index == len(audio_paths):  # go through all audio snippets using different one for each data point and start over if needed
                 audio_index = 0
 
-    # Normalize and save reverberant audio
-    subject = 1
-    for rir_points, reverberant_signal in reverberant_signals.items():
+    # Save normalized reverberant audio
+    max_data = max(abs(minmax[0]), abs(minmax[1]))
+    max_path = f'naf/metadata/ambisonics_{args.order}_{args.grid[0]}x{args.grid[1]}/normalization'
+    if not pathlib.Path(max_path).exists():  # todo: function
+        pathlib.Path(max_path).mkdir(parents=True)
+    with open(f'{max_path}/{args.room_name}_max_val.txt', 'w') as f:  # todo: paths
+        f.write(str(max_data))
+    progress = tqdm.tqdm(pathlib.Path(save_path).glob('*'))
+    for i, path in enumerate(progress):
+        path_str = str(path)
+        progress.set_description(f'Normalizing subject {i + 1}')
+        fs, reverberant_signal = wavfile.read(f'{path_str}/ambisonic.wav')
+        reverberant_signal = reverberant_signal.astype('float32', copy=False)
+        if order == 0:
+            reverberant_signal = reverberant_signal.reshape(len(reverberant_signal), 1)
         for k in range(components):
-            reverberant_signal[:, k] = normalize(reverberant_signal[:, k], minmax[0], minmax[1])
-        wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.float32))  # float32 when between -1.0 and 1.0, could add extra check for fs
-        subject += 1
+            reverberant_signal[:, k] = normalize(reverberant_signal[:, k], max_data)
+        wavfile.write(f'{path_str}/ambisonic.wav', fs, reverberant_signal.astype(np.float32))  # float32 when between -1.0 and 1.0
 
 
 def get_audio_paths(path: str) -> np.array:
@@ -189,16 +199,14 @@ def get_sn3d_norm_coefficients(order: int) -> list:
     return sn3d
 
 
-def normalize(data: np.array, min_data: float, max_data: float) -> np.array:
+def normalize(data: np.array, max_data: float) -> np.array:
     """ Simple normalization by dividing with the maximum value
 
-    :param min_data: minimum of the whole dataset (not just 'data')
     :param max_data: maximum of the whole dataset (not just 'data')
     :param data: array (1d) to normalize
     :return: normalized numpy array
     """
     data_norm = []
-    max_data = max(abs(min_data), abs(max_data))
     for value in data:
         data_norm.append(value / max_data)
     return np.array(data_norm)
