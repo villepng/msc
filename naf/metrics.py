@@ -63,7 +63,7 @@ def get_edc(rir, normalize=True):
     return edc, edc_db
 
 
-def get_rt_from_edc(edc_db, fs, offset_db=5, rt_interval_db=55):
+def get_rt_from_edc(edc_db, fs, offset_db=10, rt_interval_db=50):
     # normalize initial value of EDC top 0 dB
     edc_db -= edc_db[0]
 
@@ -89,6 +89,8 @@ def get_rt_from_edc(edc_db, fs, offset_db=5, rt_interval_db=55):
     # plt.plot(t, np.ones(np.size(t)) * -60)
     # plt.scatter(rt60, -60)
     # plt.show()
+
+    # rt60 = t[np.argmin(np.abs(edc_db + 60))], this gives lower error?
 
     return rt60
 
