@@ -41,7 +41,8 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
 def load_gt_data(args):
     spec_obj = h5py.File(f'{args.spec_base}/test_1.h5', 'r')
     phase_obj = h5py.File(f'{args.phase_base}/test_1.h5', 'r')
-    # todo: load normalization if possible
+    with open(f'metadata/ambisonics_{args.order}_{args.grid}/normalization/{args.apt}_max_val.txt', 'r') as f:
+        max_val = f.readlines()
 
     with open(f'{args.coor_base}/{args.apt}/points.txt', 'r') as f:
         lines = f.readlines()
@@ -55,7 +56,7 @@ def load_gt_data(args):
     train_keys = train_test_split[0]
     test_keys = train_test_split[1]
 
-    return spec_obj, phase_obj, positions, train_keys, test_keys
+    return spec_obj, phase_obj, positions, train_keys, test_keys, float(max_val[0])
 
 
 def load_pkl(path):
@@ -161,7 +162,7 @@ def test_model(args, test_points=None, write_errors=True):
     mean_std = load_pkl(f'{args.mean_std_base}/{apt}.pkl')
     mean = torch.from_numpy(mean_std[0]).float()[None]
     std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
-    spec_obj, phase_obj, points, train_keys, test_keys = load_gt_data(args)
+    spec_obj, phase_obj, points, train_keys, test_keys, max_val = load_gt_data(args)
     if test_points is not None:
         train_keys[orientation] = []
         test_keys[orientation] = test_points
@@ -204,12 +205,15 @@ def test_model(args, test_points=None, write_errors=True):
                     subj = src * args.subj_offset + rcv
                 fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
                 fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
-                wave_rir_out = fftconvolve(mono, predicted_rir)  # todo: normalize?
+                wave_rir_out = fftconvolve(mono, predicted_rir)
+                with np.nditer(wave_rir_out, op_flags=['readwrite']) as it:  # normalize, check if this works with multidimensionality and reformat normalization
+                    for x in it:
+                        x[...] = x / max_val
 
                 # Calculate error metrics
                 error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
                 error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
-                # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
+                error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
                 _, edc_db_pred = metrics.get_edc(predicted_rir)
                 rt60_pred= metrics.get_rt_from_edc(edc_db_pred, fs)
                 _, edc_db_gt = metrics.get_edc(gt_rir)
@@ -310,7 +314,7 @@ if __name__ == '__main__':
         test_model(options, options.test_points, False)
         if pathlib.Path(f'{options.metric_loc}/errors.pkl').is_file():
             print('Loaded total errors from previous full run:')
-            with open(f'{options.metric_loc}/errors.pkl', 'rb') as f:
+            with open(f'{options.metric_loc}/errors.pkl', 'rb') as f:  # todo: parameter for file name
                 print_errors(pickle.load(f))
     else:
         test_model(options)
