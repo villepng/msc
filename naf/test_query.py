@@ -41,6 +41,7 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
 def load_gt_data(args):
     spec_obj = h5py.File(f'{args.spec_base}/test_1.h5', 'r')
     phase_obj = h5py.File(f'{args.phase_base}/test_1.h5', 'r')
+    # todo: load normalization if possible
 
     with open(f'{args.coor_base}/{args.apt}/points.txt', 'r') as f:
         lines = f.readlines()
@@ -73,7 +74,7 @@ def plot_stft(pred, gt, points):
     axarr[1].set_title('Ground-truth')
     axarr[1].axis('off')
     axarr[2].imshow(gt[0, 0] - pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
-    axarr[2].set_title('Ground-truth')
+    axarr[2].set_title('Error')
     axarr[2].axis('off')
     plt.show()
 
@@ -93,7 +94,7 @@ def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     axarr[2].plot(np.arange(len(np.subtract(pred[:len(gt)], gt))) / sr, np.subtract(pred[:len(gt)], gt))
     # axarr[2].set_ylim([None, max(gt) * 1.1])
     axarr[2].set_xlim([0, max_len])
-    axarr[2].set_title('Error (predictions are not normalized, so this is not really useful at the moment)')
+    axarr[2].set_title('Error')
     plt.show()
 
 
@@ -136,14 +137,14 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
 def print_errors(error_metrics):
     for train_test in ['train', 'test']:
         print(f'{train_test} points'
-              f'\n  avg. MSE for the RIRs: {np.average(error_metrics[train_test]["mse"])}'
-              f'\n  avg. MSE for the RIR magnitude spectrograms: {np.average(error_metrics[train_test]["spec_mse"])}'
-              f'\n  avg. RT60 error for the RIRs: {np.average(error_metrics[train_test]["rt60"])}'
-              f'\n  avg. DRR error for the RIRs: {np.average(error_metrics[train_test]["drr"])}'
-              f'\n  avg. C50 error for the RIRs: {np.average(error_metrics[train_test]["c50"])}')
-        if len(error_metrics[train_test]["mse_wav"]):
-            print(f'\n  avg. MSE for the reverberant audio waveformats: {np.average(error_metrics[train_test]["mse_wav"])}')
-        if len(error_metrics[train_test]["errors"]) > 0:
+              f'\n  avg. MSE RIRs: {np.average(error_metrics[train_test]["mse"])}'
+              f'\n  avg. spectral error (MSE): {np.average(error_metrics[train_test]["spec_mse"])}'
+              f'\n  avg. RT60 error: {np.average(error_metrics[train_test]["rt60"])}'
+              f'\n  avg. DRR error: {np.average(error_metrics[train_test]["drr"])}'
+              f'\n  avg. C50 error: {np.average(error_metrics[train_test]["c50"])}')
+        if len(error_metrics[train_test]["mse_wav"]) > 0:
+            print(f'\n  avg. MSE for the reverberant audio waveforms: {np.average(error_metrics[train_test]["mse_wav"])}')
+        if error_metrics[train_test]["errors"] != 0:
             print(f'  errors: {error_metrics[train_test]["errors"]}')
 
 
@@ -198,14 +199,14 @@ def test_model(args):
                     subj = src * args.subj_offset + rcv + 1
                 else:
                     subj = src * args.subj_offset + rcv
-                fs, mono = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/mono.wav')
-                fs, ambisonic = wavfile.read(f'{args.wav_base}/{train_test}set/subject{subj}/ambisonic.wav')
+                fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
+                fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
                 wave_rir_out = fftconvolve(mono, predicted_rir)  # todo: normalize?
 
                 # Calculate error metrics
                 error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
                 error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
-                # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())  # todo: needs normalization, store gt dataset max value?
+                # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
                 _, edc_db_pred = metrics.get_edc(predicted_rir)
                 rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                 _, edc_db_gt = metrics.get_edc(gt_rir)
@@ -220,10 +221,11 @@ def test_model(args):
                 c50_gt = metrics.get_c50(gt_rir, delay)
                 error_metrics[train_test]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
 
-                # Plot some examples for confirming the results
+                # Plot some examples for checking the results
                 if i < 1:
                     plot_stft(output, spec_data, key)
                     plot_wave(predicted_rir, gt_rir, key)
+                    plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                     # t = np.arange(len(edc_db_gt)) / fs
                     # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                     # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
@@ -232,6 +234,7 @@ def test_model(args):
                     # plt.legend()
                     # plt.show()
                 if key in args.test_points:
+                    plot_wave(predicted_rir, gt_rir, key)
                     # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                     pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
                     wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, wave_rir_out.astype(np.int16))
