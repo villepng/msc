@@ -127,7 +127,7 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
     auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features, grid_ch=args.grid_features, num_block=args.layers,
                                           grid_gap=args.grid_gap, grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
                                           bandwidth_max=args.max_bandwidth, float_amt=args.position_float, min_xy=min_pos, max_xy=max_pos,
-                                          components=int(int(args.order) + 1) ** 2).to(output_device)
+                                          components=int((int(args.order) + 1) ** 2)).to(output_device)
     auditory_net.load_state_dict(weights['network'])
     auditory_net.to('cuda:0')
 
@@ -159,8 +159,8 @@ def test_model(args, test_points=None, write_errors=True):
 
     # Load mean and std data & gt data and prepare the network
     mean_std = load_pkl(f'{args.mean_std_base}/{apt}.pkl')
-    mean = torch.from_numpy(mean_std[0]).float()[None]
-    std = 3.0 * torch.from_numpy(mean_std[1]).float()[None]
+    mean = torch.from_numpy(mean_std[0]).float()
+    std = 3.0 * torch.from_numpy(mean_std[1]).float()
     spec_obj, phase_obj, points, train_keys, test_keys, max_val = load_gt_data(args)
     if test_points is not None:
         train_keys[orientation] = []
@@ -189,7 +189,7 @@ def test_model(args, test_points=None, write_errors=True):
             network.eval()
             with torch.no_grad():
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-            output = (output.reshape(1, 1, 256, max_len).cpu() * std[None] + mean[None]).numpy()
+            output = (output.reshape(1, 1, 256, max_len).cpu() * std + mean).numpy()
 
             # Convert into time domain to calculate most metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
@@ -215,13 +215,14 @@ def test_model(args, test_points=None, write_errors=True):
 
                 # Calculate error metrics
                 error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
-                error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
+                # error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
+                error_metrics[train_test]['spec_mse'].append(np.abs(np.subtract(output[0], spec_data[0])).mean())  # use this for now to match naf
                 error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
                 _, edc_db_pred = metrics.get_edc(predicted_rir)
-                rt60_pred= metrics.get_rt_from_edc(edc_db_pred, fs)
+                rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                 _, edc_db_gt = metrics.get_edc(gt_rir)
-                rt60_gt= metrics.get_rt_from_edc(edc_db_gt, fs)
-                error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+                rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
+                error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)  # todo: test with prm to 30 dB to match naf
 
                 delay = metrics.get_delay_samples(src_pos, rcv_pos)
                 drr_pred = metrics.get_drr(predicted_rir, delay)

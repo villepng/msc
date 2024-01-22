@@ -16,8 +16,6 @@ from model.modules import EmbeddingModuleLog
 from model.networks import KernelResidualFCEmbeds
 from options import Options
 
-torch.backends.cudnn.benchmark = True
-
 
 def find_free_port():
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
@@ -54,7 +52,7 @@ def train_net(rank, world_size, freeport, args):
     auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features, grid_ch=args.grid_features, num_block=args.layers,
                                           grid_gap=args.grid_gap, grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
                                           bandwidth_max=args.max_bandwidth, float_amt=args.position_float, min_xy=dataset.min_pos,
-                                          max_xy=dataset.max_pos, components=int(int(args.order) + 1) ** 2).to(output_device)
+                                          max_xy=dataset.max_pos, components=int((int(args.order) + 1) ** 2)).to(output_device)
 
     if rank == 0:
         print(f'Dataloader requires {len(sound_loader)} batches')
@@ -126,7 +124,7 @@ def train_net(rank, world_size, freeport, args):
             degree = data_stuff[1].to(output_device, non_blocking=True)
             position = data_stuff[2].to(output_device, non_blocking=True)
             non_norm_position = data_stuff[3].to(output_device, non_blocking=True)
-            freqs = data_stuff[4].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
+            freqs = data_stuff[4].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi  # todo: double-check that these have the correct data
             times = data_stuff[5].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
 
             with torch.no_grad():
@@ -181,11 +179,11 @@ if __name__ == '__main__':
     exp_name_filled = exp_name.format(cur_args.apt)
     cur_args.exp_name = exp_name_filled
     if not os.path.isdir(cur_args.save_loc):
-        print('Save directory {} does not exist, creating...'.format(cur_args.save_loc))
+        print(f'Save directory {cur_args.save_loc} does not exist, creating...')
         os.makedirs(cur_args.save_loc)
     exp_dir = os.path.join(cur_args.save_loc, exp_name_filled)
     cur_args.exp_dir = exp_dir
-    print('Experiment directory is {}'.format(exp_dir))
+    print(f'Experiment directory is {exp_dir}')
     if not os.path.isdir(exp_dir):
         os.mkdir(exp_dir)
     world_size = cur_args.gpus
