@@ -17,10 +17,11 @@ from naf.test_query import to_wave_if
 
 
 class GetSpec:
-    def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=512):
+    def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=512, components=1):
         self.sr = sr
         self.n_fft = fft_size
         self.hop = self.n_fft // 4
+        self.components = components
         if use_torch:
             assert False  # not sure why the structure is like this but currently it doesn't matter
             self.use_torch = True
@@ -37,9 +38,7 @@ class GetSpec:
         if self.use_torch:
             transformed_data = self.spec_transform(torch.from_numpy(wav_data)).numpy()
         else:
-            transformed_data = np.array([librosa.stft(wav_data[0], n_fft=self.n_fft, hop_length=self.hop)])[:, :-1]  # mono
-            # transformed_data = np.array([librosa.stft(wav_data[0], n_fft=self.n_fft, hop_length=self.hop),
-            #                             librosa.stft(wav_data[1], n_fft=self.n_fft, hop_length=self.hop)])[:, :-1]
+            transformed_data = np.array([librosa.stft(wav_data, n_fft=self.n_fft, hop_length=self.hop)])[0, :, :-1]
 
         real_component = np.abs(transformed_data)
         img_component = np.angle(transformed_data)
@@ -97,12 +96,12 @@ def main():
     pathlib.Path(phase_path).mkdir(parents=True, exist_ok=True)
     rooms = ['test_1']
     max_len_dict = {}
-    spec_getter = GetSpec()
+    spec_getter = GetSpec(components=int(int(args.order) + 1) ** 2)
     with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
     for room_name in rooms:
-        length_tracker = []
+        length_tracker = -np.inf
         f_mag = h5py.File(f'{mag_path}/{room_name}.h5', 'w')
         f_phase = h5py.File(f'{phase_path}/{room_name}.h5', 'w')
         for orientation in ['0']:
@@ -112,7 +111,7 @@ def main():
                 # resampled = resample(np.clip(rir, -1.0, 1.0).T)
                 resampled = rir.T
                 real_spec, img_spec, raw_phase = spec_getter.transform(resampled)
-                length_tracker.append(real_spec.shape[2])
+                length_tracker = np.max([length_tracker, real_spec.shape[2]])
 
                 # sr = 16000
                 # reconstructed_wave = to_wave_if(real_spec, img_spec)
@@ -132,7 +131,7 @@ def main():
                 f_mag.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=real_spec.astype(np.half))
                 f_phase.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=img_spec.astype(np.half))
         print('Max length {}'.format(room_name), np.max(length_tracker))
-        max_len_dict.update({room_name: np.max(length_tracker)})
+        max_len_dict.update({room_name: int(length_tracker)})
         f_mag.close()
         f_phase.close()
 
