@@ -39,6 +39,7 @@ class Soundsamples(torch.utils.data.Dataset):
         self.sound_data.close()
         self.sound_data = None
         self.full_path = full_path
+        self.components = int((int(arg_stuff.order) + 1) ** 2)
 
         self.sound_files = {'0': [], '90': [], '180': [], '270': []}
         self.sound_files_test = {'0': [], '90': [], '180': [], '270': []}
@@ -108,7 +109,7 @@ class Soundsamples(torch.utils.data.Dataset):
                 spec_data = (spec_data - self.mean[:, :, :actual_spec_len])/self.std[:, :, :actual_spec_len]
                 # 2, freq, time
                 sound_size = spec_data.shape
-                selected_time = np.random.randint(0, sound_size[2], self.num_samples)
+                selected_time = np.random.randint(0, sound_size[2], self.num_samples)  # (self.components, self.num_samples) ?
                 selected_freq = np.random.randint(0, sound_size[1], self.num_samples)
                 degree = orientation_idx
 
@@ -124,7 +125,7 @@ class Soundsamples(torch.utils.data.Dataset):
 
                 total_non_norm_position = torch.cat((torch.from_numpy(non_norm_start)[None], torch.from_numpy(non_norm_end)[None]), dim=1).float()
 
-                selected_total = spec_data[:,selected_freq,selected_time]
+                selected_total = spec_data[:, selected_freq, selected_time]
                 loaded = True
 
             except Exception as e:
