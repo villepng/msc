@@ -9,7 +9,7 @@ class EmbeddingModuleLog(nn.Module):
         super().__init__()
         self.functions = funcs
         self.num_functions = list(range(len(funcs)))
-        self.freqs = torch.nn.Parameter(2.0**torch.from_numpy(np.linspace(start=0.0,stop=max_freq, num=num_freqs).astype(np.single)), requires_grad=False)
+        self.freqs = torch.nn.Parameter(2.0**torch.from_numpy(np.linspace(start=0.0, stop=max_freq, num=num_freqs).astype(np.single)), requires_grad=False)
         self.ch_dim = ch_dim
         self.funcs = funcs
         self.include_in = include_in
@@ -35,7 +35,7 @@ def distance(x1, x2):
 
 # small improvement in performance
 # @torch.jit.script
-def fit_predict_torch(input_pos:torch.Tensor, input_target:torch.Tensor, predict_pos:torch.Tensor, bandwidth:torch.Tensor) -> torch.Tensor:
+def fit_predict_torch(input_pos: torch.Tensor, input_target: torch.Tensor, predict_pos: torch.Tensor, bandwidth: torch.Tensor) -> torch.Tensor:
     dist_vector = -distance(predict_pos, input_pos)
     gauss_dist = torch.exp(dist_vector/(2.0 * torch.square(bandwidth.unsqueeze(0))))
     magnitude = torch.sum(gauss_dist, dim=1, keepdim=True)
