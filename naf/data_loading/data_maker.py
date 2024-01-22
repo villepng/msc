@@ -130,7 +130,7 @@ def main():
 
                 f_mag.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=real_spec.astype(np.half))
                 f_phase.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=img_spec.astype(np.half))
-        print('Max length {}'.format(room_name), np.max(length_tracker))
+        print(f'Max length {room_name}: {int(length_tracker)}')
         max_len_dict.update({room_name: int(length_tracker)})
         f_mag.close()
         f_phase.close()
@@ -148,18 +148,18 @@ def main():
         for key in keys:
             all_arrs.append(pad(f[key], max_len).astype(np.single))  # Originally only 4000 are randomly selected for mean and std calculation
         print('Computing mean')
-        mean_val = np.mean(all_arrs, axis=(0, 1))  # todo: make these multidimensional as well (just use axis=0)
+        mean_val = np.mean(all_arrs, axis=0)
         print('Computing std')
-        std_val = np.std(all_arrs, axis=(0, 1)) + 0.1
+        std_val = np.std(all_arrs, axis=0) + 0.1
 
         plt.imshow(all_arrs[0][0])
         plt.title('Example spectrum')
         plt.show()
-        plt.imshow(mean_val)
-        plt.title('Mean')
+        plt.imshow(mean_val[0])
+        plt.title('Mean 0')
         plt.show()
-        plt.imshow(std_val)
-        plt.title('STD')
+        plt.imshow(std_val[0])
+        plt.title('STD 0')
         plt.show()
         del all_arrs
         f.close()
