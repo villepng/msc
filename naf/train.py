@@ -51,13 +51,10 @@ def train_net(rank, world_size, freeport, args):
     time_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
     freq_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
 
-    auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features,
-                                          grid_ch=args.grid_features, num_block=args.layers,
-                                          grid_gap=args.grid_gap, grid_bandwidth=args.bandwith_init,
-                                          bandwidth_min=args.min_bandwidth,
-                                          bandwidth_max=args.max_bandwidth,
-                                          float_amt=args.position_float, min_xy=dataset.min_pos,
-                                          max_xy=dataset.max_pos).to(output_device)
+    auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features, grid_ch=args.grid_features, num_block=args.layers,
+                                          grid_gap=args.grid_gap, grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
+                                          bandwidth_max=args.max_bandwidth, float_amt=args.position_float, min_xy=dataset.min_pos,
+                                          max_xy=dataset.max_pos, components=int(int(args.order) + 1) ** 2).to(output_device)
 
     if rank == 0:
         print(f'Dataloader requires {len(sound_loader)} batches')
