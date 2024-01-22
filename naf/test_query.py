@@ -86,14 +86,14 @@ def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     max_len = max(np.arange(len(gt)) / sr)
     axarr[0].plot(np.arange(len(pred)) / sr, pred)
     axarr[0].set_xlim([0, max_len])
-    # axarr[0].set_ylim([None, max(gt) * 1.1])
+    axarr[0].set_ylim([None, max(gt) * 1.1])
     axarr[0].set_title('Predicted')
     axarr[1].plot(np.arange(len(gt)) / sr, gt)
     axarr[1].set_xlim([0, max_len])
     axarr[1].set_ylim([None, max(gt) * 1.1])
     axarr[1].set_title('Ground-truth')
     axarr[2].plot(np.arange(len(np.subtract(pred[:len(gt)], gt))) / sr, np.subtract(pred[:len(gt)], gt))
-    # axarr[2].set_ylim([None, max(gt) * 1.1])
+    axarr[2].set_ylim([None, max(gt) * 1.1])
     axarr[2].set_xlim([0, max_len])
     axarr[2].set_title('Error')
     plt.show()
@@ -124,11 +124,10 @@ def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_p
 
 def prepare_network(weight_path, args, output_device, min_pos, max_pos):
     weights = torch.load(weight_path, map_location='cuda:0')
-    auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features,
-                                          grid_ch=args.grid_features, num_block=args.layers, grid_gap=args.grid_gap,
-                                          grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
-                                          bandwidth_max=args.max_bandwidth, float_amt=args.position_float,
-                                          min_xy=min_pos, max_xy=max_pos).to(output_device)
+    auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features, grid_ch=args.grid_features, num_block=args.layers,
+                                          grid_gap=args.grid_gap, grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
+                                          bandwidth_max=args.max_bandwidth, float_amt=args.position_float, min_xy=min_pos, max_xy=max_pos,
+                                          components=int(int(args.order) + 1) ** 2).to(output_device)
     auditory_net.load_state_dict(weights['network'])
     auditory_net.to('cuda:0')
 
@@ -195,7 +194,11 @@ def test_model(args, test_points=None, write_errors=True):
             # Convert into time domain to calculate most metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
             predicted_rir = to_wave(output[0])[0]
-            gt_rir = to_wave_if(spec_data[0], phase_data[0])  # Could also load original RIR, but shouldn't matter
+            gt_rir = to_wave_if(spec_data[0], phase_data[0])  # could also load original RIR, but shouldn't matter
+            # gt_rir = to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
+            # t = np.arange(len(gt_rir)) / 16000
+            # plt.plot(t, 20*np.log10(abs(gt_rir)))
+            # plt.show()
             if predicted_rir is not None and gt_rir is not None:
                 # Convert from src and rcv points into 'subjects' in the original dataset format
                 src, rcv = int(src), int(rcv)

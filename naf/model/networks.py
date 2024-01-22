@@ -27,12 +27,13 @@ class KernelLinearAct(nn.Module):
 
 class KernelResidualFCEmbeds(nn.Module):
     def __init__(self, input_ch, intermediate_ch=512, grid_ch=64, num_block=8, output_ch=1, grid_gap=0.25, grid_bandwidth=0.25, bandwidth_min=0.1,
-                 bandwidth_max=0.5, float_amt=0.1, min_xy=None, max_xy=None, probe=False):
+                 bandwidth_max=0.5, float_amt=0.1, min_xy=None, max_xy=None, probe=False, components=1):
         super(KernelResidualFCEmbeds, self).__init__()
         # input_ch (int): number of ch going into the network
         # intermediate_ch (int): number of intermediate neurons
         # min_xy, max_xy are the bounding box of the room in real (not normalized) coordinates
         # probe = True returns the features of the last layer
+        # components = components to predict based on the ambisonics order
 
         for k in range(num_block - 1):
             self.register_parameter("left_right_{}".format(k), nn.Parameter(torch.randn(1, 1, 1, intermediate_ch) / math.sqrt(intermediate_ch), requires_grad=True))  # test fix
@@ -64,6 +65,7 @@ class KernelResidualFCEmbeds(nn.Module):
         self.register_buffer("grid_coors_xy", torch.from_numpy(xy_train).float(), persistent=True)
         self.xy_offset = nn.Parameter(torch.zeros_like(self.grid_coors_xy), requires_grad=True)
         self.grid_0 = nn.Parameter(torch.randn(len(grid_coors_x), grid_ch, device="cpu").float() / np.sqrt(float(grid_ch)), requires_grad=True)
+        self.components = components
 
     def forward(self, input_stuff, rot_idx, sound_loc=None):
         samples = input_stuff.shape[1]
