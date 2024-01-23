@@ -105,11 +105,9 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
 
             # Load data
             fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
-            audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
+            # audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
-            if rm_delay:
-                delay_samples = int( ((src_pos[0] - recv_pos[0]) ** 2 + (src_pos[1] - recv_pos[1]) ** 2 + (heights[0] - heights[1]) ** 2) ** (1/2) / SOUND_V * fs )
 
             # Generate/load SH RIRs
             if f'{i}-{j}' in RIRS:
@@ -128,26 +126,24 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
 
             # Apply RIRs, check min/max for normalization and store metadata, currently mono is not normalized as it's only used for listening
             subject = data_index + 1
-            audio_length = len(audio_anechoic)
-            reverberant_signal = np.zeros((audio_length, components))
+            # audio_length = len(audio_anechoic)  # this can be used to limit reverberant audio length to make sure it matches with mono length and coordinate data
+            reverberant_signal = []  # np.zeros((audio_length, components))
             pathlib.Path(f'{save_path}/subject{subject}').mkdir(parents=True)
             wavfile.write(f'{save_path}/subject{subject}/mono.wav', fs, audio_anechoic.astype(np.int16))
             # t = np.arange(len(sh_rirs[:, 0])) / fs
             for k in range(components):
                 # plt.plot(t, sh_rirs[:, k])
                 # plt.plot(sh_rirs[:, k])
-                reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
-                if rm_delay:
-                    reverberant_signal[:, k] = np.roll(reverberant_signal[:, k], -delay_samples)
-                    with open(f'{save_path}/subject{subject}/delays.txt', 'a') as delay_f:
-                        delay_f.write(f'{delay_samples}\n')
+                # reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
+                reverberant_signal.append(fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze()))
             # plt.show()
+            reverberant_signal = np.array(reverberant_signal).T
             if np.min(reverberant_signal) < minmax[0]: minmax[0] = np.min(reverberant_signal)
             if np.max(reverberant_signal) > minmax[1]: minmax[1] = np.max(reverberant_signal)
-            # Temporarily store non-normalized reverberant audio
-            wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal.astype(np.int16))
+            # Temporarily store non-normalized reverberant audio, will be very loud
+            wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal)
             save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
-                             fs=fs, audio_length=audio_length, path=f'{save_path}/subject{data_index + 1}')
+                             fs=fs, audio_length=400, path=f'{save_path}/subject{data_index + 1}')  # using 400 to only write the coordinates once
 
             audio_index += 1
             data_index += 1
@@ -166,7 +162,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
         path_str = str(path)
         progress.set_description(f'Normalizing subject {i + 1}')
         fs, reverberant_signal = wavfile.read(f'{path_str}/ambisonic.wav')
-        reverberant_signal = reverberant_signal.astype('float32', copy=False)
         if order == 0:
             reverberant_signal = reverberant_signal.reshape(len(reverberant_signal), 1)
         for k in range(components):
