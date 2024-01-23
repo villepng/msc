@@ -10,6 +10,8 @@ import tqdm
 
 import naf.metrics as metrics
 
+from masp.shoebox_room_sim.render_rirs import filter_rirs
+from pyroomacoustics.experimental.rt60 import measure_rt60
 from scipy.io import wavfile
 from scipy.signal import fftconvolve
 
@@ -137,15 +139,15 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
 def print_errors(error_metrics):
     for train_test in ['train', 'test']:
         print(f'{train_test} points'
-              f'\n  avg. MSE RIRs: {np.average(error_metrics[train_test]["mse"])}'
-              f'\n  avg. spectral error (MSE): {np.average(error_metrics[train_test]["spec_mse"])}'
+              f'\n  avg. MSE for RIRs: {np.average(error_metrics[train_test]["mse"])}'
+              f'\n  avg. spectral error: {np.average(error_metrics[train_test]["spec_mse"])}'
               f'\n  avg. RT60 error: {np.average(error_metrics[train_test]["rt60"])}'
               f'\n  avg. DRR error: {np.average(error_metrics[train_test]["drr"])}'
               f'\n  avg. C50 error: {np.average(error_metrics[train_test]["c50"])}')
         if len(error_metrics[train_test]["mse_wav"]) > 0:
             print(f'\n  avg. MSE for the reverberant audio waveforms: {np.average(error_metrics[train_test]["mse_wav"])}')
         if error_metrics[train_test]["errors"] != 0:
-            print(f'  errors: {error_metrics[train_test]["errors"]}')
+            print(f'  errors: {error_metrics[train_test]["errors"]}')  # currently not used at all
 
 
 def test_model(args, test_points=None, write_errors=True):
@@ -243,6 +245,8 @@ def test_model(args, test_points=None, write_errors=True):
             # plt.plot(t, np.ones(np.size(t)) * -60)
             # plt.scatter(rt60_pred, -60, label='Predicted RT60')
             # plt.scatter(rt60_gt, -60, label='GT RT60')
+            # plt.scatter(measure_rt60(predicted_rir[0], fs, 30), -60, label='Predicted RT60 PRA')
+            # plt.scatter(measure_rt60(gt_rir[0], fs, 30), -60, label='GT RT60 PRA')
             # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
             # plt.legend()
             # plt.show()
@@ -251,7 +255,7 @@ def test_model(args, test_points=None, write_errors=True):
             if i < 1:
                 plot_stft(output, spec_data, key)
                 plot_wave(predicted_rir[0], gt_rir[0], key)
-                plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
+                # plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
                 # t = np.arange(len(edc_db_gt)) / fs
                 # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                 # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
@@ -264,8 +268,6 @@ def test_model(args, test_points=None, write_errors=True):
                 # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                 pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
                 wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, reverb_pred.astype(np.float32))
-        else:
-            error_metrics[train_test]['errors'] += 1
 
     spec_obj.close()
     phase_obj.close()

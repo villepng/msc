@@ -50,8 +50,8 @@ class Options:
     def initialize(self):
         parser = self.parser
         parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
-        parser.add_argument('--grid', default='16x8', type=str)
-        parser.add_argument('--order', default='1')
+        parser.add_argument('--grid', default='20x10', type=str)
+        parser.add_argument('--order', default='0')
         parser.add_argument('--exp_name', default='{}')
         parser.add_argument('--save_loc', type=str)
 
@@ -97,7 +97,7 @@ class Options:
             self.initialize()
         self.opt = self.parser.parse_args()
         self.check_paths()
-        self.opt.max_len = {'test_1': 28}  # Calculated when generating the dataset
+        self.opt.max_len = {'test_1': 29}  # Calculated when generating the dataset
         self.opt.subj_offset = int(self.opt.grid.split('x')[0]) * int(self.opt.grid.split('x')[1]) - 1  # Offset to convert between 'subjects' and points, see test_query.py before error metric calculation
         self.opt.components = int((int(self.opt.order) + 1) ** 2)
         torch.manual_seed(0)
