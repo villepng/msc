@@ -96,7 +96,7 @@ def main():
     pathlib.Path(phase_path).mkdir(parents=True, exist_ok=True)
     rooms = ['test_1']
     max_len_dict = {}
-    spec_getter = GetSpec(components=int(int(args.order) + 1) ** 2)
+    spec_getter = GetSpec(components=args.components)
     with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
