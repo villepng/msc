@@ -127,7 +127,7 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
     auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features, grid_ch=args.grid_features, num_block=args.layers,
                                           grid_gap=args.grid_gap, grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
                                           bandwidth_max=args.max_bandwidth, float_amt=args.position_float, min_xy=min_pos, max_xy=max_pos,
-                                          components=int((int(args.order) + 1) ** 2)).to(output_device)
+                                          components=args.components).to(output_device)
     auditory_net.load_state_dict(weights['network'])
     auditory_net.to('cuda:0')
 
@@ -180,7 +180,7 @@ def test_model(args, test_points=None, write_errors=True):
             spec_data, phase_data = torch.from_numpy(spec_obj[full_key][:]).float(), torch.from_numpy(phase_obj[full_key][:]).float()
             spec_data, phase_data = spec_data[:, :, :max_len], phase_data[:, :, :max_len]
             try:
-                spec_data, phase_data = (spec_data.reshape(1, 1, 256, max_len).cpu()).numpy(), (phase_data.reshape(1, 1, 256, max_len).cpu()).numpy()
+                spec_data, phase_data = (spec_data.reshape(1, args.components, 256, max_len).cpu()).numpy(), (phase_data.reshape(1, args.components, 256, max_len).cpu()).numpy()
             except:  # tmp fix
                 pass
 
@@ -189,11 +189,11 @@ def test_model(args, test_points=None, write_errors=True):
             network.eval()
             with torch.no_grad():
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-            output = (output.reshape(1, 1, 256, max_len).cpu() * std + mean).numpy()
+            output = (output.reshape(1, args.components, 256, max_len).cpu() * std + mean).numpy()
 
             # Convert into time domain to calculate most metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
-            predicted_rir = to_wave(output[0])[0]
+            predicted_rir = to_wave(output[0])  # [channels, length]
             gt_rir = to_wave_if(spec_data[0], phase_data[0])  # could also load original RIR, but shouldn't matter
             # gt_rir = to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
             # t = np.arange(len(gt_rir)) / 16000
@@ -208,16 +208,19 @@ def test_model(args, test_points=None, write_errors=True):
                     subj = src * args.subj_offset + rcv
                 fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
                 fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
-                wave_rir_out = fftconvolve(mono, predicted_rir)
-                with np.nditer(wave_rir_out, op_flags=['readwrite']) as it:  # normalize, check if this works with multidimensionality and reformat normalization
-                    for x in it:
-                        x[...] = x / max_val
+                reverb_pred = []
+                for j in range(args.components):
+                    reverb_pred.append(fftconvolve(mono, predicted_rir[j, :]))
+                    with np.nditer(reverb_pred[j], op_flags=['readwrite']) as it:  # normalize, check if this works with multidimensionality and reformat normalization
+                        for x in it:
+                            x[...] = x / max_val
+                # todo: reshape prediction
 
                 # Calculate error metrics
                 error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
                 # error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
                 error_metrics[train_test]['spec_mse'].append(np.abs(np.subtract(output[0], spec_data[0])).mean())  # use this for now to match naf
-                error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(wave_rir_out[:len(ambisonic)], ambisonic)).mean())
+                error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred[:len(ambisonic)], ambisonic)).mean())
                 _, edc_db_pred = metrics.get_edc(predicted_rir)
                 rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                 _, edc_db_gt = metrics.get_edc(gt_rir)
@@ -246,7 +249,7 @@ def test_model(args, test_points=None, write_errors=True):
                 if i < 1:
                     plot_stft(output, spec_data, key)
                     plot_wave(predicted_rir, gt_rir, key)
-                    plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
+                    plot_wave(reverb_pred, ambisonic, key, 'audio waveform')
                     # t = np.arange(len(edc_db_gt)) / fs
                     # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                     # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
@@ -258,7 +261,7 @@ def test_model(args, test_points=None, write_errors=True):
                     plot_wave(predicted_rir, gt_rir, key)
                     # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                     pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
-                    wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, wave_rir_out.astype(np.int16))
+                    wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, reverb_pred.astype(np.int16))
             else:
                 error_metrics[train_test]['errors'] += 1
 
@@ -304,9 +307,8 @@ def to_wave_if(input_stft, input_if):
     phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
     try:
         restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
-        wave1 = librosa.istft(restored[0], hop_length=512 // 4)
-        # wave2 = librosa.istft(restored[1], hop_length=512 // 4)  # mono
-        return wave1  # , wave2
+        wave = librosa.istft(restored, hop_length=512 // 4)
+        return wave
     except:  # todo: proper fix in main
         return None
 
