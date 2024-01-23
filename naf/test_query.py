@@ -177,12 +177,14 @@ def test_model(args, test_points=None, write_errors=True):
             full_key = f'{orientation}_{key}'
             src, rcv = key.split('_')
             src_pos, rcv_pos = points[src], points[rcv]
-            spec_data, phase_data = torch.from_numpy(spec_obj[full_key][:]).float(), torch.from_numpy(phase_obj[full_key][:]).float()
-            spec_data, phase_data = spec_data[:, :, :max_len], phase_data[:, :, :max_len]
+            spec_data0, phase_data0 = spec_obj[full_key][:], phase_obj[full_key][:]
             try:
-                spec_data, phase_data = (spec_data.reshape(1, args.components, 256, max_len).cpu()).numpy(), (phase_data.reshape(1, args.components, 256, max_len).cpu()).numpy()
-            except:  # tmp fix
-                pass
+                spec_data, phase_data = (spec_data0.reshape(1, args.components, 256, max_len)), (phase_data0.reshape(1, args.components, 256, max_len))
+            except ValueError:  # pad with zeros if lengths are not equal to max_len
+                len_spec, len_phase = spec_data0.shape[-1], phase_data0.shape[-1]
+                spec_data0, phase_data0 = (spec_data0.reshape(1, args.components, 256, len_spec)), (phase_data0.reshape(1, args.components, 256, len_phase))
+                spec_data, phase_data = np.zeros((1, args.components, 256, max_len), dtype=np.int32), np.zeros((1, args.components, 256, max_len), dtype=np.int32)
+                spec_data[:, :, :, :len_spec], phase_data[:, :, :, :len_phase] = spec_data0, phase_data0
 
             # Poll the network
             net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
@@ -199,71 +201,71 @@ def test_model(args, test_points=None, write_errors=True):
             # t = np.arange(len(gt_rir)) / 16000
             # plt.plot(t, 20*np.log10(abs(gt_rir)))
             # plt.show()
-            if predicted_rir is not None and gt_rir is not None:
-                # Convert from src and rcv points into 'subjects' in the original dataset format
-                src, rcv = int(src), int(rcv)
-                if rcv < src:
-                    subj = src * args.subj_offset + rcv + 1
-                else:
-                    subj = src * args.subj_offset + rcv
-                fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
-                fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
-                reverb_pred = []
-                for j in range(args.components):
-                    reverb_pred.append(fftconvolve(mono, predicted_rir[j, :]))
-                    with np.nditer(reverb_pred[j], op_flags=['readwrite']) as it:  # normalize, check if this works with multidimensionality and reformat normalization
-                        for x in it:
-                            x[...] = x / max_val
-                # todo: reshape prediction
 
-                # Calculate error metrics
-                error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
-                # error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
-                error_metrics[train_test]['spec_mse'].append(np.abs(np.subtract(output[0], spec_data[0])).mean())  # use this for now to match naf
-                error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred[:len(ambisonic)], ambisonic)).mean())
-                _, edc_db_pred = metrics.get_edc(predicted_rir)
-                rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
-                _, edc_db_gt = metrics.get_edc(gt_rir)
-                rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
-                error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)  # todo: test with prm to 30 dB to match naf
+            # Convert from src and rcv points into 'subjects' in the original dataset format
+            src, rcv = int(src), int(rcv)
+            if rcv < src:
+                subj = src * args.subj_offset + rcv + 1
+            else:
+                subj = src * args.subj_offset + rcv
+            fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
+            fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
+            reverb_pred = []
+            for j in range(args.components):
+                reverb_pred.append(fftconvolve(mono, predicted_rir[j, :]))
+                with np.nditer(reverb_pred[j], op_flags=['readwrite']) as it:  # normalize
+                    for x in it:
+                        x[...] = x / max_val
+            reverb_pred = np.array(reverb_pred).T
 
-                delay = metrics.get_delay_samples(src_pos, rcv_pos)
-                drr_pred = metrics.get_drr(predicted_rir, delay)
-                drr_gt = metrics.get_drr(gt_rir, delay)
-                error_metrics[train_test]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
-                c50_pred = metrics.get_c50(predicted_rir, delay)
-                c50_gt = metrics.get_c50(gt_rir, delay)
-                error_metrics[train_test]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
+            # Calculate error metrics
+            error_metrics[train_test]['mse'].append(np.square(np.subtract(predicted_rir, gt_rir)).mean())
+            # error_metrics[train_test]['spec_mse'].append(np.square(np.subtract(output[0], spec_data[0])).mean())
+            error_metrics[train_test]['spec_mse'].append(np.abs(np.subtract(output[0], spec_data[0])).mean())  # use this for now to match naf
+            # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo, check which is longer and slice
+            _, edc_db_pred = metrics.get_edc(predicted_rir[0])  # todo: rt60 error for all components?, filter to estimate for each frequency band
+            rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
+            _, edc_db_gt = metrics.get_edc(gt_rir[0])
+            rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
+            error_metrics[train_test]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)  # todo: test with prm to 30 dB to match naf
 
+            delay = metrics.get_delay_samples(src_pos, rcv_pos)
+            drr_pred = metrics.get_drr(predicted_rir[0], delay)
+            drr_gt = metrics.get_drr(gt_rir[0], delay)
+            error_metrics[train_test]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
+            c50_pred = metrics.get_c50(predicted_rir[0], delay)
+            c50_gt = metrics.get_c50(gt_rir[0], delay)
+            error_metrics[train_test]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
+
+            # t = np.arange(len(edc_db_gt)) / fs
+            # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
+            # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
+            # plt.plot(t, np.ones(np.size(t)) * -60)
+            # plt.scatter(rt60_pred, -60, label='Predicted RT60')
+            # plt.scatter(rt60_gt, -60, label='GT RT60')
+            # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
+            # plt.legend()
+            # plt.show()
+
+            # Plot some examples for checking the results
+            if i < 1:
+                plot_stft(output, spec_data, key)
+                plot_wave(predicted_rir[0], gt_rir[0], key)
+                plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
                 # t = np.arange(len(edc_db_gt)) / fs
                 # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                 # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
                 # plt.plot(t, np.ones(np.size(t)) * -60)
-                # plt.scatter(rt60_pred, -60, label='Predicted RT60')
-                # plt.scatter(rt60_gt, -60, label='GT RT60')
                 # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
                 # plt.legend()
                 # plt.show()
-
-                # Plot some examples for checking the results
-                if i < 1:
-                    plot_stft(output, spec_data, key)
-                    plot_wave(predicted_rir, gt_rir, key)
-                    plot_wave(reverb_pred, ambisonic, key, 'audio waveform')
-                    # t = np.arange(len(edc_db_gt)) / fs
-                    # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
-                    # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
-                    # plt.plot(t, np.ones(np.size(t)) * -60)
-                    # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
-                    # plt.legend()
-                    # plt.show()
-                if key in args.test_points:
-                    plot_wave(predicted_rir, gt_rir, key)
-                    # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
-                    pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
-                    wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, reverb_pred.astype(np.int16))
-            else:
-                error_metrics[train_test]['errors'] += 1
+            if key in args.test_points:
+                plot_wave(predicted_rir[0], gt_rir[0], key)
+                # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
+                pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
+                wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, reverb_pred.astype(np.float32))
+        else:
+            error_metrics[train_test]['errors'] += 1
 
     spec_obj.close()
     phase_obj.close()
@@ -305,12 +307,9 @@ def to_wave_if(input_stft, input_if):
     padded_input_if = np.concatenate((input_if, input_if[:, -1:] * 0.0), axis=1)
     unwrapped = np.cumsum(padded_input_if, axis=-1) * np.pi
     phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
-    try:
-        restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
-        wave = librosa.istft(restored, hop_length=512 // 4)
-        return wave
-    except:  # todo: proper fix in main
-        return None
+    restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
+    wave = librosa.istft(restored, hop_length=512 // 4)
+    return wave
 
 
 if __name__ == '__main__':
