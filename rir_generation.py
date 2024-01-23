@@ -26,6 +26,16 @@ MATERIALS = {
     }
 
 
+def check_and_create_dir(path: str) -> None:
+    """ Create directory if it doesn't exist
+
+    :param path: path string (or object?)
+    :return:
+    """
+    if not pathlib.Path(path).exists():
+        pathlib.Path(path).mkdir(parents=True)
+
+
 def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
     """ Create a grid of (x, y) coordinates with specified amount of points (x_points * y_points)
 
@@ -79,7 +89,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     # nBands = 1
     # band_centerfreqs = np.empty(nBands)
     # band_centerfreqs[0] = 1000
-    mic_specs = np.array([[1, 0, 0, 1]])
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # basic absorption
     abs_wall = np.array([MATERIALS['fiberglass'], MATERIALS['fiberglass'], MATERIALS['fiberglass'],
@@ -114,10 +123,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                 sh_rirs = RIRS[f'{i}-{j}']
             else:
                 abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
-                # abs_echograms = srs.compute_echograms_mic(room, source, receiver, abs_wall, limits, mic_specs)
                 sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
-                # sh_rirs = srs.render_rirs_mic(abs_echograms, band_centerfreqs, fs).squeeze()
-                # sh_rirs = np.roll(sh_rirs, -500, axis=0)  # Remove delay from filtering, not needed with basic absorption
                 if order == 0:
                     sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
                 sh_rirs = sh_rirs[500:-1, :]  # Remove delay from filtering, not needed with basic absorption
@@ -150,11 +156,10 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             if audio_index == len(audio_paths):  # go through all audio snippets using different one for each data point and start over if needed
                 audio_index = 0
 
-    # Save normalized reverberant audio, todo: normalize each channel with each channel's max?
+    # Save normalized reverberant audio
     max_data = max(abs(minmax[0]), abs(minmax[1]))
     max_path = f'naf/metadata/ambisonics_{args.order}_{args.grid[0]}x{args.grid[1]}/normalization'
-    if not pathlib.Path(max_path).exists():  # todo: function
-        pathlib.Path(max_path).mkdir(parents=True)
+    check_and_create_dir(max_path)
     with open(f'{max_path}/{args.room_name}_max_val.txt', 'w') as f:  # todo: paths
         f.write(str(max_data))
     progress = tqdm.tqdm(pathlib.Path(save_path).glob('*'))
@@ -282,8 +287,7 @@ def write_coordinate_metadata(grid: np.array, heights: list, room: list, room_na
     """
     paths = [f'{save_path}/replica/{room_name}', f'{save_path}/minmax']
     for path in paths:
-        if not pathlib.Path(path).exists():
-            pathlib.Path(path).mkdir(parents=True)
+        check_and_create_dir(path)
     if pathlib.Path(f'{paths[0]}/points.txt').is_file():
         pathlib.Path(f'{paths[0]}/points.txt').unlink()
     with open(f'{paths[0]}/points.txt', 'a+') as f:
@@ -302,8 +306,7 @@ def write_split_metadata(grid: np.array, room_name: str, save_path: str) -> None
     :return:
     """
     save_path = f'{save_path}/train_test_split'
-    if not pathlib.Path(save_path).exists():
-        pathlib.Path(save_path).mkdir(parents=True)
+    check_and_create_dir(save_path)
     points = grid.shape[0]
     data = []
     for i in range(points):
@@ -363,8 +366,7 @@ def main():
 
     # Save calculated RIRs
     if not args.skip_rir_write:  # might technically need even more specific file names
-        if not pathlib.Path(rir_path).exists():
-            pathlib.Path(rir_path).mkdir(parents=True)
+        check_and_create_dir(rir_path)
         with open(f'{rir_path}/rirs.pickle', 'wb') as f:
             pickle.dump(RIRS, f)
 
