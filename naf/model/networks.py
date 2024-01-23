@@ -26,7 +26,7 @@ class KernelLinearAct(nn.Module):
 
 
 class KernelResidualFCEmbeds(nn.Module):
-    def __init__(self, input_ch, intermediate_ch=512, grid_ch=64, num_block=8, output_ch=1, grid_gap=0.25, grid_bandwidth=0.25, bandwidth_min=0.1,
+    def __init__(self, input_ch, intermediate_ch=512, grid_ch=64, num_block=8, output_ch=2, grid_gap=0.25, grid_bandwidth=0.25, bandwidth_min=0.1,
                  bandwidth_max=0.5, float_amt=0.1, min_xy=None, max_xy=None, probe=False, components=1):
         super(KernelResidualFCEmbeds, self).__init__()
         # input_ch (int): number of ch going into the network
