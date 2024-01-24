@@ -148,7 +148,7 @@ def main():
         all_arrs, all_arrs2 = [], []
         for key in keys:
             all_arrs.append(pad(f[key], max_len).astype(np.single))  # Originally only 4000 are randomly selected for mean and std calculation
-            all_arrs.append(pad(f2[key], max_len).astype(np.single))
+            all_arrs2.append(pad(f2[key], max_len).astype(np.single))
         print('Computing mean')
         mean_val = np.mean(all_arrs, axis=0)
         print('Computing std')
