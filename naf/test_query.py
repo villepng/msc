@@ -204,6 +204,9 @@ def test_model(args, test_points=None, write_errors=True):
             # plt.plot(t, 20*np.log10(abs(gt_rir)))
             # plt.show()
 
+            # band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
+            # todo: use rir filtering to get rirs for each frequency band, and calculate errors for them separately
+
             # Convert from src and rcv points into 'subjects' in the original dataset format
             src, rcv = int(src), int(rcv)
             if rcv < src:
