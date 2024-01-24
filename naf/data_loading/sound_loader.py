@@ -56,6 +56,7 @@ class Soundsamples(torch.utils.data.Dataset):
             mean_std = pickle.load(mean_std_ff)
         self.mean = torch.from_numpy(mean_std[0]).float()
         self.std = 3.0 * torch.from_numpy(mean_std[1]).float()
+        self.std_if = 3.0 * torch.from_numpy(mean_std[2]).float()
 
         with open(coor_path, 'r') as f:
             lines = f.readlines()
@@ -111,7 +112,7 @@ class Soundsamples(torch.utils.data.Dataset):
 
                 actual_spec_len = spec_data.shape[2]
                 spec_data = (spec_data - self.mean[:, :, :actual_spec_len])/self.std[:, :, :actual_spec_len]
-                # todo: if normalization
+                phase_data = phase_data / self.std_if
                 # 2, freq, time
                 sound_size = spec_data.shape
                 selected_time = np.random.randint(0, sound_size[2], self.num_samples)  # (self.components, self.num_samples) ?
