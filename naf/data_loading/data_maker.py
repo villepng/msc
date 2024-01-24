@@ -142,15 +142,18 @@ def main():
         f_name = f'{f_name_old}.h5'
         print(f'Processing {f_name}')
         f = h5py.File(f'{raw_path}/{f_name}', 'r')
+        f2 = h5py.File(f'{phase_path}/{f_name}', 'r')
         keys = list(f.keys())
         max_len = max_len_dict[f_name.split('.')[0]]
-        all_arrs = []
+        all_arrs, all_arrs2 = [], []
         for key in keys:
             all_arrs.append(pad(f[key], max_len).astype(np.single))  # Originally only 4000 are randomly selected for mean and std calculation
+            all_arrs.append(pad(f2[key], max_len).astype(np.single))
         print('Computing mean')
         mean_val = np.mean(all_arrs, axis=0)
         print('Computing std')
         std_val = np.std(all_arrs, axis=0) + 0.1
+        std_val2 = np.std(all_arrs2, axis=0) + 0.1
 
         plt.imshow(all_arrs[0][0])
         plt.title('Example spectrum')
@@ -161,11 +164,12 @@ def main():
         plt.imshow(std_val[0])
         plt.title('STD 0')
         plt.show()
-        del all_arrs
+        del all_arrs, all_arrs2
         f.close()
+        f2.close()
         gc.collect()
         with open(f'{mean_std}/{f_name.replace("h5", "pkl")}', 'wb') as mean_std_file:
-            pickle.dump([mean_val, std_val], mean_std_file)
+            pickle.dump([mean_val, std_val, std_val2], mean_std_file)
 
 
 if __name__ == '__main__':
