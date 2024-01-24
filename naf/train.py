@@ -13,7 +13,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from data_loading.sound_loader import Soundsamples
 from model.modules import EmbeddingModuleLog
-from model.networks import KernelResidualFCEmbeds
+from model.networks import KernelResidualFCEmbeds, PhaseLoss
 from options import Options
 
 
@@ -95,7 +95,8 @@ def train_net(rank, world_size, freeport, args):
 
     # We have conditional forward, must set find_unused_parameters to true
     ddp_auditory_net = DDP(auditory_net, find_unused_parameters=True, device_ids=[rank])
-    criterion = torch.nn.MSELoss()  # todo: add phase loss
+    criterion = torch.nn.MSELoss()
+    criterion_phase = PhaseLoss()
     orig_container = []
     grid_container = []
     for par_name, par_val in ddp_auditory_net.named_parameters():
@@ -144,14 +145,13 @@ def train_net(rank, world_size, freeport, args):
                 continue
             out_spec = output[:, :, :, 0]
             out_phase = output[:, :, :, 1]
-            # todo: scale and combine losses etc.
             loss = criterion(out_spec, gt)
-            loss_ph = criterion(out_phase, phase)
+            loss_ph = criterion_phase(out_phase, phase)
             if rank == 0:
-                total_losses += loss.detach()
-                progress.set_description(f' loss: {loss.detach():.6f}')
+                total_losses += loss.detach() + loss_ph.detach()
+                progress.set_description(f' mag loss: {loss.detach():.6f}, phase loss: {loss_ph.detach():.6f}')
                 cur_iter += 1
-            loss = loss + loss_ph
+            loss = loss + loss_ph  # todo: check and scale
             loss.backward()
             optimizer.step()
         decay_rate = args.lr_decay

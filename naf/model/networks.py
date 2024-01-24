@@ -90,3 +90,20 @@ class KernelResidualFCEmbeds(nn.Module):
         if self.probe:
             return out
         return self.out_layer(out)
+
+
+class PhaseLoss(nn.Module):
+
+    def __init__(self):
+        super(PhaseLoss, self).__init__()
+
+    def forward(self, data, target):
+        """ Proposed by By Richard et al. https://github.com/facebookresearch/BinauralSpeechSynthesis
+        """
+        # compute actual phase loss in angular space
+        data_angles, target_angles = torch.atan2(data[:, 0], data[:, 1]), torch.atan2(target[:, 0], target[:, 1])
+        loss = torch.abs(data_angles - target_angles)
+        # positive + negative values in left part of coordinate system cause angles > pi
+        # => 2pi -> 0, 3/4pi -> 1/2pi, ... (triangle function over [0, 2pi] with peak at pi)
+        loss = np.pi - torch.abs(loss - np.pi)
+        return torch.mean(loss)
