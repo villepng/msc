@@ -143,7 +143,7 @@ def print_errors(error_metrics):
               f'\n  avg. spectral error: {np.average(error_metrics[train_test]["spec_mse"])}'
               f'\n  avg. RT60 error: {np.average(error_metrics[train_test]["rt60"])}'
               f'\n  avg. DRR error (dB): {np.average(error_metrics[train_test]["drr"])}'
-              f'\n  avg. C50 error: {np.average(error_metrics[train_test]["c50"])}')
+              f'\n  avg. C50 error (db): {np.average(error_metrics[train_test]["c50"])}')
         if len(error_metrics[train_test]["mse_wav"]) > 0:
             print(f'\n  avg. MSE for the reverberant audio waveforms: {np.average(error_metrics[train_test]["mse_wav"])}')
         if error_metrics[train_test]["errors"] != 0:
@@ -235,8 +235,8 @@ def test_model(args, test_points=None, write_errors=True):
             drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[0], delay))
             drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[0], delay))
             error_metrics[train_test]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
-            c50_pred = metrics.get_c50(predicted_rir[0], delay)
-            c50_gt = metrics.get_c50(gt_rir[0], delay)
+            c50_pred = 10 * np.log10(metrics.get_c50(predicted_rir[0], delay))
+            c50_gt = 10 * np.log10(metrics.get_c50(gt_rir[0], delay))
             error_metrics[train_test]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
 
             # t = np.arange(len(edc_db_gt)) / fs
