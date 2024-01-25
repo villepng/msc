@@ -163,6 +163,7 @@ def test_model(args, test_points=None, write_errors=True):
     mean_std = load_pkl(f'{args.mean_std_base}/{apt}.pkl')
     mean = torch.from_numpy(mean_std[0]).float()
     std = 3.0 * torch.from_numpy(mean_std[1]).float()
+    std_phase = 3.0 * torch.from_numpy(mean_std[2]).float()
     spec_obj, phase_obj, points, train_keys, test_keys, max_val = load_gt_data(args)
     if test_points is not None:
         train_keys[orientation] = []
@@ -193,11 +194,15 @@ def test_model(args, test_points=None, write_errors=True):
             network.eval()
             with torch.no_grad():
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
+            phase = output[:, :, :, 1]
+            output = output[:, :, :, 0]
+            phase = (phase.reshape(1, args.components, 256, max_len).cpu() * std_phase).numpy()
             output = (output.reshape(1, args.components, 256, max_len).cpu() * std + mean).numpy()
 
             # Convert into time domain to calculate most metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
-            predicted_rir = to_wave(output[0])  # [channels, length]
+            # predicted_rir = to_wave(output[0])  # [channels, length], random phase
+            predicted_rir = to_wave_if(output[0], phase[0])  # predicted phase
             gt_rir = to_wave_if(spec_data[0], phase_data[0])  # could also load original RIR, but shouldn't matter
             # gt_rir = to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
             # t = np.arange(len(gt_rir)) / 16000

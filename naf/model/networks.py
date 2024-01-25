@@ -101,9 +101,10 @@ class PhaseLoss(nn.Module):
         """ Proposed by By Richard et al. https://github.com/facebookresearch/BinauralSpeechSynthesis
         """
         # compute actual phase loss in angular space
-        data_angles, target_angles = torch.atan2(data[:, 0], data[:, 1]), torch.atan2(target[:, 0], target[:, 1])
-        loss = torch.abs(data_angles - target_angles)
+        # data_angles, target_angles = torch.atan2(data[:, 0], data[:, :, 1]), torch.atan2(target[:, 0], target[:, 1])
+        # loss = torch.abs(data_angles - target_angles)
         # positive + negative values in left part of coordinate system cause angles > pi
         # => 2pi -> 0, 3/4pi -> 1/2pi, ... (triangle function over [0, 2pi] with peak at pi)
-        loss = np.pi - torch.abs(loss - np.pi)
+        # loss = np.pi - torch.abs(loss - np.pi)
+        loss = torch.abs(data - target)
         return torch.mean(loss)
