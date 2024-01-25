@@ -26,8 +26,8 @@ class Options:
         """
         save = f'ambisonics_{self.opt.order}_{self.opt.grid}'
         
-        if self.opt.save_loc is None:
-            self.opt.save_loc = f'./test_results/{save}'
+        if self.opt.model_save_loc is None:
+            self.opt.model_save_loc = f'./test_results/{save}'
         if self.opt.coor_base is None:
             self.opt.coor_base = f'./metadata/{save}/replica'
         if self.opt.spec_base is None:
@@ -53,7 +53,7 @@ class Options:
         parser.add_argument('--grid', default='20x10', type=str)
         parser.add_argument('--order', default='0')
         parser.add_argument('--exp_name', default='{}')
-        parser.add_argument('--save_loc', type=str)
+        parser.add_argument('--model_save_loc', type=str, help='change this to test with a grid of points different from training')
 
         # dataset arguments, if not given, default ones are used (see check_paths())
         parser.add_argument('--coor_base', type=str, help='location of the training index to coordinate mapping')

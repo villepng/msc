@@ -153,7 +153,7 @@ def print_errors(error_metrics):
 def test_model(args, test_points=None, write_errors=True):
     apt = args.apt
     max_len = args.max_len[apt]
-    weight_path = f'{args.save_loc}/{apt}/0200.chkpt'
+    weight_path = f'{args.model_save_loc}/{apt}/0200.chkpt'
     min_max = load_pkl(f'{args.minmax_base}/{args.apt}_minmax.pkl')
     min_pos, max_pos = np.array(min_max[0][0:2]), np.array(min_max[1][0:2])
     output_device = 0
