@@ -17,10 +17,10 @@ from naf.test_query import to_wave_if
 
 
 class GetSpec:
-    def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=512, components=1):
+    def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=512, components=1):  # originally 512, 128
         self.sr = sr
         self.n_fft = fft_size
-        self.hop = self.n_fft // 4
+        self.hop = self.n_fft // 4  # 4, 2
         self.components = components
         if use_torch:
             assert False  # not sure why the structure is like this but currently it doesn't matter
@@ -156,7 +156,10 @@ def main():
         std_val2 = np.std(all_arrs2, axis=0) + 0.1
 
         plt.imshow(all_arrs[0][0])
-        plt.title('Example spectrum')
+        plt.title('Example magnitude')
+        plt.show()
+        plt.imshow(all_arrs2[0][0], cmap='inferno')
+        plt.title('Example phase angles')
         plt.show()
         plt.imshow(mean_val[0])
         plt.title('Mean 0')
