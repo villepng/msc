@@ -204,6 +204,7 @@ def test_model(args, test_points=None, write_errors=True):
             # predicted_rir = to_wave(output[0])  # [channels, length], random phase
             predicted_rir = to_wave_if(output[0], phase[0])  # predicted phase
             gt_rir = to_wave_if(spec_data[0], phase_data[0])  # could also load original RIR, but shouldn't matter
+            # plot_stft(phase, phase_data, key)
             # gt_rir = to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
             # t = np.arange(len(gt_rir)) / 16000
             # plt.plot(t, 20*np.log10(abs(gt_rir)))
