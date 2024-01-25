@@ -185,10 +185,10 @@ if __name__ == '__main__':
     exp_name = cur_args.exp_name
     exp_name_filled = exp_name.format(cur_args.apt)
     cur_args.exp_name = exp_name_filled
-    if not os.path.isdir(cur_args.save_loc):
-        print(f'Save directory {cur_args.save_loc} does not exist, creating...')
-        os.makedirs(cur_args.save_loc)
-    exp_dir = os.path.join(cur_args.save_loc, exp_name_filled)
+    if not os.path.isdir(cur_args.model_save_loc):
+        print(f'Save directory {cur_args.model_save_loc} does not exist, creating...')
+        os.makedirs(cur_args.model_save_loc)
+    exp_dir = os.path.join(cur_args.model_save_loc, exp_name_filled)
     cur_args.exp_dir = exp_dir
     print(f'Experiment directory is {exp_dir}')
     if not os.path.isdir(exp_dir):
