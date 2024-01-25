@@ -145,13 +145,14 @@ def train_net(rank, world_size, freeport, args):
                 continue
             out_spec = output[:, :, :, 0]
             out_phase = output[:, :, :, 1]
+            a = 0.25  # todo: check scaling
             loss = criterion(out_spec, gt)
-            loss_ph = criterion_phase(out_phase, phase)
+            loss_ph = a * criterion_phase(out_phase, phase)
             if rank == 0:
                 total_losses += loss.detach() + loss_ph.detach()
                 progress.set_description(f' mag loss: {loss.detach():.6f}, phase loss: {loss_ph.detach():.6f}')
                 cur_iter += 1
-            loss = loss + loss_ph  # todo: check and scale
+            loss = loss + loss_ph
             loss.backward()
             optimizer.step()
         decay_rate = args.lr_decay
