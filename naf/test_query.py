@@ -328,7 +328,7 @@ if __name__ == '__main__':
         print('Querying model at the wanted points for plotting and audio generation')
         test_model(options, options.test_points, False)
         if pathlib.Path(f'{options.metric_loc}/{options.error_file}.pkl').is_file():
-            print('Loaded total errors from previous full run:')
+            print(f'Loaded total errors from \'{options.error_file}\':')
             with open(f'{options.metric_loc}/{options.error_file}.pkl', 'rb') as f:
                 print_errors(pickle.load(f))
     else:
