@@ -139,13 +139,13 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
 def print_errors(error_metrics):
     for train_test in ['train', 'test']:
         print(f'{train_test} points'
-              f'\n  avg. MSE for RIRs: {np.average(error_metrics[train_test]["mse"])}'
-              f'\n  avg. spectral error: {np.average(error_metrics[train_test]["spec_mse"])}'
-              f'\n  avg. RT60 error: {np.average(error_metrics[train_test]["rt60"])}'
-              f'\n  avg. DRR error (dB): {np.average(error_metrics[train_test]["drr"])}'
-              f'\n  avg. C50 error (db): {np.average(error_metrics[train_test]["c50"])}')
+              f'\n  avg. MSE for RIRs:   {np.average(error_metrics[train_test]["mse"]):.6f}'
+              f'\n  avg. spectral error: {np.average(error_metrics[train_test]["spec_mse"]):.6f}'
+              f'\n  avg. RT60 error:     {np.average(error_metrics[train_test]["rt60"]):.6f}'
+              f'\n  avg. DRR error (dB): {np.average(error_metrics[train_test]["drr"]):.6f}'
+              f'\n  avg. C50 error (dB): {np.average(error_metrics[train_test]["c50"]):.6f}')
         if len(error_metrics[train_test]["mse_wav"]) > 0:
-            print(f'\n  avg. MSE for the reverberant audio waveforms: {np.average(error_metrics[train_test]["mse_wav"])}')
+            print(f'\n  avg. MSE for the reverberant audio waveforms: {np.average(error_metrics[train_test]["mse_wav"])}:.6f')
         if error_metrics[train_test]["errors"] != 0:
             print(f'  errors: {error_metrics[train_test]["errors"]}')  # currently not used at all
 
@@ -282,7 +282,7 @@ def test_model(args, test_points=None, write_errors=True):
     if write_errors:
         print_errors(error_metrics)
         pathlib.Path(args.metric_loc).mkdir(parents=True, exist_ok=True)
-        with open(f'{args.metric_loc}/errors.pkl', 'wb') as f:
+        with open(f'{args.metric_loc}/{options.error_file}.pkl', 'wb') as f:
             pickle.dump(error_metrics, f)
 
 
@@ -327,9 +327,9 @@ if __name__ == '__main__':
     if options.test_points is not None and not options.recalculate_errors:
         print('Querying model at the wanted points for plotting and audio generation')
         test_model(options, options.test_points, False)
-        if pathlib.Path(f'{options.metric_loc}/errors.pkl').is_file():
+        if pathlib.Path(f'{options.metric_loc}/{options.error_file}.pkl').is_file():
             print('Loaded total errors from previous full run:')
-            with open(f'{options.metric_loc}/errors.pkl', 'rb') as f:  # todo: parameter for file name
+            with open(f'{options.metric_loc}/{options.error_file}.pkl', 'rb') as f:
                 print_errors(pickle.load(f))
     else:
         test_model(options)
