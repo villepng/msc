@@ -17,10 +17,10 @@ from naf.test_query import to_wave_if
 
 
 class GetSpec:
-    def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=512, components=1):  # originally 512, 128
+    def __init__(self, sr=16000, use_torch=False, power_mod=2, fft_size=128, components=1):  # originally 512
         self.sr = sr
         self.n_fft = fft_size
-        self.hop = self.n_fft // 4  # 4, 2
+        self.hop = self.n_fft // 2  # 4
         self.components = components
         if use_torch:
             assert False  # not sure why the structure is like this but currently it doesn't matter
