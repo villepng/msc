@@ -31,7 +31,7 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
     non_norm_position = transformed_input[2].to(output_device, non_blocking=True)
     freqs = transformed_input[3][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
     times = transformed_input[4][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
-    pixel_count = max_len * 256
+    pixel_count = max_len * 64  # todo
 
     position_embed = xyz_embedder(position).expand(-1, pixel_count, -1)
     freq_embed = freq_embedder(freqs)
@@ -103,7 +103,7 @@ def plot_wave(pred, gt, points, name='impulse response', sr=16000):
 
 def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_pos, max_bbox_pos):
     selected_time = np.arange(0, max_len)
-    selected_freq = np.arange(0, 256)
+    selected_freq = np.arange(0, 64)  # todo
     selected_time, selected_freq = np.meshgrid(selected_time, selected_freq)
     selected_time = selected_time.reshape(-1)
     selected_freq = selected_freq.reshape(-1)
@@ -182,7 +182,7 @@ def test_model(args, test_points=None, write_errors=True):
             src_pos, rcv_pos = points[src], points[rcv]
             spec_data0, phase_data0 = spec_obj[full_key][:], phase_obj[full_key][:]
             try:
-                spec_data, phase_data = (spec_data0.reshape(1, args.components, 256, max_len)), (phase_data0.reshape(1, args.components, 256, max_len))
+                spec_data, phase_data = (spec_data0.reshape(1, args.components, 64, max_len)), (phase_data0.reshape(1, args.components, 64, max_len))
             except ValueError:  # pad with zeros if lengths are not equal to max_len
                 len_spec, len_phase = spec_data0.shape[-1], phase_data0.shape[-1]
                 spec_data0, phase_data0 = (spec_data0.reshape(1, args.components, 256, len_spec)), (phase_data0.reshape(1, args.components, 256, len_phase))
@@ -196,8 +196,8 @@ def test_model(args, test_points=None, write_errors=True):
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
             phase = output[:, :, :, 1]
             output = output[:, :, :, 0]
-            phase = (phase.reshape(1, args.components, 256, max_len).cpu() * std_phase).numpy()
-            output = (output.reshape(1, args.components, 256, max_len).cpu() * std + mean).numpy()
+            phase = (phase.reshape(1, args.components, 64, max_len).cpu() * std_phase).numpy()  # todo
+            output = (output.reshape(1, args.components, 64, max_len).cpu() * std + mean).numpy()
 
             # Convert into time domain to calculate most metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases

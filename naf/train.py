@@ -126,7 +126,7 @@ def train_net(rank, world_size, freeport, args):
             degree = data_stuff[2].to(output_device, non_blocking=True)
             position = data_stuff[3].to(output_device, non_blocking=True)
             non_norm_position = data_stuff[4].to(output_device, non_blocking=True)
-            freqs = data_stuff[5].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi  # todo: double-check that these have the correct data
+            freqs = data_stuff[5].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
             times = data_stuff[6].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
 
             with torch.no_grad():
@@ -145,9 +145,9 @@ def train_net(rank, world_size, freeport, args):
                 continue
             out_spec = output[:, :, :, 0]
             out_phase = output[:, :, :, 1]
-            a = 0.05  # todo: check scaling
+            a = 0.8  # todo: check scaling
             loss = criterion(out_spec, gt)
-            loss_ph = criterion_phase(out_spec, out_phase, gt, phase)
+            loss_ph = criterion(out_phase, phase)
             if rank == 0:
                 total_losses += loss.detach() + loss_ph.detach()
                 progress.set_description(f' mag loss: {loss.detach():.6f}, phase loss: {loss_ph.detach():.6f}')
