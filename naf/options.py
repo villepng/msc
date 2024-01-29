@@ -63,6 +63,8 @@ class Options:
         parser.add_argument('--minmax_base', type=str)
         parser.add_argument('--wav_base', type=str)
         parser.add_argument('--split_loc', type=str)
+        parser.add_argument('--n_fft', default=128, type=int)
+        parser.add_argument('--hop_len', default=64, type=int)
 
         # training arguments
         parser.add_argument('--gpus', default=1, type=int)
@@ -98,6 +100,7 @@ class Options:
             self.initialize()
         self.opt = self.parser.parse_args()
         self.check_paths()
+        self.opt.freq_bins = self.opt.n_fft // 2
         self.opt.max_len = {'test_1': 86}  # Calculated when generating the dataset, 45 with fft_size 512
         self.opt.subj_offset = int(self.opt.grid.split('x')[0]) * int(self.opt.grid.split('x')[1]) - 1  # Offset to convert between 'subjects' and points, see test_query.py before error metric calculation
         self.opt.components = int((int(self.opt.order) + 1) ** 2)

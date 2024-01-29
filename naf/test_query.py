@@ -25,13 +25,13 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
     time_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
     freq_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
 
-    transformed_input = prepare_input(0, rcv_pos, src_pos, max_len, min_pos, max_pos)
+    transformed_input = prepare_input(0, rcv_pos, src_pos, max_len, min_pos, max_pos, args.freq_bins)
     degree = torch.Tensor([transformed_input[0]]).to(output_device, non_blocking=True).long()
     position = transformed_input[1][None].to(output_device, non_blocking=True)
     non_norm_position = transformed_input[2].to(output_device, non_blocking=True)
     freqs = transformed_input[3][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
     times = transformed_input[4][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
-    pixel_count = max_len * 64  # todo
+    pixel_count = max_len * args.freq_bins
 
     position_embed = xyz_embedder(position).expand(-1, pixel_count, -1)
     freq_embed = freq_embedder(freqs)
@@ -101,9 +101,9 @@ def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     plt.show()
 
 
-def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_pos, max_bbox_pos):
+def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_pos, max_bbox_pos, freq_bins):
     selected_time = np.arange(0, max_len)
-    selected_freq = np.arange(0, 64)  # todo
+    selected_freq = np.arange(0, freq_bins)
     selected_time, selected_freq = np.meshgrid(selected_time, selected_freq)
     selected_time = selected_time.reshape(-1)
     selected_freq = selected_freq.reshape(-1)
@@ -182,11 +182,14 @@ def test_model(args, test_points=None, write_errors=True):
             src_pos, rcv_pos = points[src], points[rcv]
             spec_data0, phase_data0 = spec_obj[full_key][:], phase_obj[full_key][:]
             try:
-                spec_data, phase_data = (spec_data0.reshape(1, args.components, 64, max_len)), (phase_data0.reshape(1, args.components, 64, max_len))
+                spec_data, phase_data = ((spec_data0.reshape(1, args.components, args.freq_bins, max_len)),
+                                         (phase_data0.reshape(1, args.components, args.freq_bins, max_len)))
             except ValueError:  # pad with zeros if lengths are not equal to max_len
                 len_spec, len_phase = spec_data0.shape[-1], phase_data0.shape[-1]
-                spec_data0, phase_data0 = (spec_data0.reshape(1, args.components, 256, len_spec)), (phase_data0.reshape(1, args.components, 256, len_phase))
-                spec_data, phase_data = np.zeros((1, args.components, 256, max_len), dtype=np.int32), np.zeros((1, args.components, 256, max_len), dtype=np.int32)
+                spec_data0, phase_data0 = ((spec_data0.reshape(1, args.components, args.freq_bins, len_spec)),
+                                           (phase_data0.reshape(1, args.components, args.freq_bins, len_phase)))
+                spec_data, phase_data = (np.zeros((1, args.components, args.freq_bins, max_len), dtype=np.int32),
+                                         np.zeros((1, args.components, args.freq_bins, max_len), dtype=np.int32))
                 spec_data[:, :, :, :len_spec], phase_data[:, :, :, :len_phase] = spec_data0, phase_data0
 
             # Poll the network
@@ -196,14 +199,14 @@ def test_model(args, test_points=None, write_errors=True):
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
             phase = output[:, :, :, 1]
             output = output[:, :, :, 0]
-            phase = (phase.reshape(1, args.components, 64, max_len).cpu() * std_phase).numpy()  # todo
-            output = (output.reshape(1, args.components, 64, max_len).cpu() * std + mean).numpy()
+            phase = (phase.reshape(1, args.components, args.freq_bins, max_len).cpu() * std_phase).numpy()
+            output = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std + mean).numpy()
 
             # Convert into time domain to calculate most metrics
-            # predicted_rir = to_wave_if(output[0], phase_data[0])  # using original phases
-            # predicted_rir = to_wave(output[0])  # [channels, length], random phase
-            predicted_rir = to_wave_if(output[0], phase[0])  # predicted phase
-            gt_rir = to_wave_if(spec_data[0], phase_data[0])  # could also load original RIR, but shouldn't matter
+            # predicted_rir = to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
+            # predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
+            predicted_rir = to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
+            gt_rir = to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
             # plot_stft(phase, phase_data, key)
             # gt_rir = to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
             # t = np.arange(len(gt_rir)) / 16000
@@ -287,7 +290,7 @@ def test_model(args, test_points=None, write_errors=True):
             pickle.dump(error_metrics, f)
 
 
-def to_wave(input_spec, mean_val=None, std_val=None, gl=False, orig_phase=None):
+def to_wave(input_spec, hop_len, mean_val=None, std_val=None, gl=False, orig_phase=None):
     if mean_val is not None:
         renorm_input = input_spec * std_val
         renorm_input = renorm_input + mean_val
@@ -301,16 +304,16 @@ def to_wave(input_spec, mean_val=None, std_val=None, gl=False, orig_phase=None):
             np.random.seed(1234)
             rp = np.random.uniform(-np.pi, np.pi, renorm_input.shape)
             f = renorm_input * (np.cos(rp) + (1.j * np.sin(rp)))
-            out_wave = librosa.istft(f, hop_length=128)
+            out_wave = librosa.istft(f, hop_length=hop_len)
         else:
-            out_wave = librosa.griffinlim(renorm_input, hop_length=128, n_iter=40, momentum=0.5, random_state=64)
+            out_wave = librosa.griffinlim(renorm_input, hop_length=hop_len, n_iter=40, momentum=0.5, random_state=64)
     else:
         f = renorm_input * (np.cos(orig_phase) + (1.j * np.sin(orig_phase)))
         out_wave = librosa.istft(f, win_length=400, hop_length=200)
     return out_wave
 
 
-def to_wave_if(input_stft, input_if):
+def to_wave_if(input_stft, input_if, hop_len):
     # 2 chanel input of shape [2,freq,time]
     # First input is logged mag
     # Second input is if divided by np.pi
@@ -319,7 +322,7 @@ def to_wave_if(input_stft, input_if):
     unwrapped = np.cumsum(padded_input_if, axis=-1) * np.pi
     phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
     restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
-    wave = librosa.istft(restored, hop_length=512 // 4)
+    wave = librosa.istft(restored, hop_length=hop_len)
     return wave
 
 
