@@ -12,7 +12,7 @@ class BasicProject2(nn.Module):
         super(BasicProject2, self).__init__()
         self.proj = nn.Linear(input_ch, output_ch, bias=True)
 
-    def forward(self, x):
+    def forward(self, x):  # 20, 2000, 275; 254 (in feat)
         return self.proj(x)
 
 
@@ -42,8 +42,8 @@ class KernelResidualFCEmbeds(nn.Module):
         for k in range(4):
             self.register_parameter('rot_{}'.format(k), nn.Parameter(torch.randn(num_block - 1, 1, 1, intermediate_ch) / math.sqrt(intermediate_ch), requires_grad=True))
 
-        self.proj = BasicProject2(input_ch + int(2 * grid_ch), intermediate_ch)
-        self.residual_1 = nn.Sequential(BasicProject2(input_ch + 128, intermediate_ch), nn.LeakyReLU(negative_slope=0.1), BasicProject2(intermediate_ch, intermediate_ch))
+        self.proj = BasicProject2(input_ch + int(2 * grid_ch) + 21, intermediate_ch)
+        self.residual_1 = nn.Sequential(BasicProject2(input_ch + 128 + 21, intermediate_ch), nn.LeakyReLU(negative_slope=0.1), BasicProject2(intermediate_ch, intermediate_ch))
         self.layers = torch.nn.ModuleList()
         for k in range(num_block - 2):
             self.layers.append(KernelLinearAct(intermediate_ch, intermediate_ch))
@@ -94,17 +94,14 @@ class KernelResidualFCEmbeds(nn.Module):
 
 class PhaseLoss(nn.Module):
 
-    def __init__(self):
+    def __init__(self, early_len=None):
+        self.early_len = early_len  # to remove?
         super(PhaseLoss, self).__init__()
 
-    def forward(self, spec, phase, target_spec, target_phase):  # or np.angle from original result?
-        """ Proposed by By Richard et al. https://github.com/facebookresearch/BinauralSpeechSynthesis
-        """
-        # compute actual phase loss in angular space
-        data_angles, target_angles = torch.atan2(spec, phase), torch.atan2(target_phase, target_spec)
-        loss = torch.abs(data_angles - target_angles)
-        # positive + negative values in left part of coordinate system cause angles > pi
-        # => 2pi -> 0, 3/4pi -> 1/2pi, ... (triangle function over [0, 2pi] with peak at pi)
-        loss = np.pi - torch.abs(loss - np.pi)
-        # loss = torch.abs(data - target)
+    def forward(self, data, target):
+        # only calculate loss for the early reflections, as later reflections are mainly just noise
+        if self.early_len is not None:
+            loss = torch.abs(data[:self.early_len, :, :] - target[:self.early_len, :, :])  # 20, n, 2000
+        else:
+            loss = torch.abs(data - target)
         return torch.mean(loss)

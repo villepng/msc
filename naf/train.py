@@ -96,7 +96,7 @@ def train_net(rank, world_size, freeport, args):
     # We have conditional forward, must set find_unused_parameters to true
     ddp_auditory_net = DDP(auditory_net, find_unused_parameters=True, device_ids=[rank])
     criterion = torch.nn.MSELoss()
-    criterion_phase = PhaseLoss()
+    criterion_phase = PhaseLoss()  # todo
     orig_container = []
     grid_container = []
     for par_name, par_val in ddp_auditory_net.named_parameters():
@@ -128,24 +128,25 @@ def train_net(rank, world_size, freeport, args):
             non_norm_position = data_stuff[4].to(output_device, non_blocking=True)
             freqs = data_stuff[5].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
             times = data_stuff[6].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
+            times_ph = data_stuff[7].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
 
             with torch.no_grad():
                 position_embed = xyz_embedder(position).expand(-1, pixel_count, -1)
                 freq_embed = freq_embedder(freqs)
                 time_embed = time_embedder(times)
+                time_embed_ph = time_embedder(times_ph)
 
-            total_in = torch.cat((position_embed, freq_embed, time_embed), dim=2)
+            total_in = torch.cat((position_embed, freq_embed, time_embed, time_embed_ph), dim=2)
             optimizer.zero_grad(set_to_none=False)
             try:
                 output = ddp_auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-            except Exception as foward_exception:
+            except Exception as e:
                 print(gt.shape, degree.shape, position.shape, freqs.shape, times.shape, position_embed.shape,
                       freq_embed.shape, time_embed.shape)
-                print('Failure', foward_exception)
-                continue
+                quit(e)
             out_spec = output[:, :, :, 0]
             out_phase = output[:, :, :, 1]
-            a = 0.8  # todo: check scaling
+            a = 1.0  # todo: check scaling
             loss = criterion(out_spec, gt)
             loss_ph = criterion(out_phase, phase)
             if rank == 0:
@@ -168,7 +169,7 @@ def train_net(rank, world_size, freeport, args):
             par_idx += 1
         if rank == 0:
             avg_loss = total_losses.item() / cur_iter
-            if epoch % 10 == 0:
+            if epoch % 10 == 0 or epoch == 1:
                 print(f'\n  Ending epoch {epoch} for room \'{args.exp_name}\', avg. loss {avg_loss:.6f}')
         if rank == 0 and (epoch % 20 == 0 or epoch == 1 or epoch > (args.epochs - 3)):
             save_name = str(epoch).zfill(4) + '.chkpt'
