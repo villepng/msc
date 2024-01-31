@@ -31,11 +31,13 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
     non_norm_position = transformed_input[2].to(output_device, non_blocking=True)
     freqs = transformed_input[3][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
     times = transformed_input[4][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
+    times_ph = transformed_input[5][None].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * math.pi
     pixel_count = max_len * args.freq_bins
 
     position_embed = xyz_embedder(position).expand(-1, pixel_count, -1)
     freq_embed = freq_embedder(freqs)
     time_embed = time_embedder(times)
+    time_embed_ph = time_embedder(times_ph)
 
     return torch.cat((position_embed, freq_embed, time_embed), dim=2), degree, non_norm_position
 
@@ -72,13 +74,13 @@ def plot_stft(pred, gt, points):
     fig.suptitle(f'Predicted log impulse response {points}', fontsize=16)
     axarr[0].imshow(pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
     axarr[0].set_title('Predicted')
-    axarr[0].axis('off')
+    # axarr[0].axis('off')
     axarr[1].imshow(gt[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
     axarr[1].set_title('Ground-truth')
-    axarr[1].axis('off')
+    # axarr[1].axis('off')
     axarr[2].imshow(gt[0, 0] - pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
     axarr[2].set_title('Error')
-    axarr[2].axis('off')
+    # axarr[2].axis('off')
     plt.show()
 
 
@@ -108,6 +110,10 @@ def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_p
     selected_time = selected_time.reshape(-1)
     selected_freq = selected_freq.reshape(-1)
 
+    selected_time_ph = np.arange(0, 13)
+    selected_time_ph, _ = np.meshgrid(selected_time_ph, selected_freq)
+    selected_time_ph = selected_time.reshape(-1)
+
     degree = orientation_idx
 
     non_norm_start = np.array(reciever_pos)
@@ -120,8 +126,8 @@ def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_p
     end_position = torch.clamp(end_position, min=-1.0, max=1.0)
     total_position = torch.cat((start_position, end_position), dim=1).float()
 
-    return degree, total_position, total_non_norm_position, 2.0 * torch.from_numpy(
-        selected_freq).float() / 255.0 - 1.0, 2.0 * torch.from_numpy(selected_time).float() / float(max_len - 1) - 1.0
+    return (degree, total_position, total_non_norm_position, 2.0 * torch.from_numpy(selected_freq).float() / 255.0 - 1.0,
+            2.0 * torch.from_numpy(selected_time).float() / float(max_len - 1) - 1.0, 2.0 * torch.from_numpy(selected_time_ph).float() / float(12) - 1.0)
 
 
 def prepare_network(weight_path, args, output_device, min_pos, max_pos):
@@ -163,7 +169,7 @@ def test_model(args, test_points=None, write_errors=True):
     mean_std = load_pkl(f'{args.mean_std_base}/{apt}.pkl')
     mean = torch.from_numpy(mean_std[0]).float()
     std = 3.0 * torch.from_numpy(mean_std[1]).float()
-    std_phase = 3.0 * torch.from_numpy(mean_std[2]).float()
+    # std_phase = 3.0 * torch.from_numpy(mean_std[2]).float()
     spec_obj, phase_obj, points, train_keys, test_keys, max_val = load_gt_data(args)
     if test_points is not None:
         train_keys[orientation] = []
@@ -171,6 +177,7 @@ def test_model(args, test_points=None, write_errors=True):
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
     # Polling the network to calculate error metrics
+    band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     error_metrics = {'train': {'mse': [], 'mse_wav': [], 'spec_mse': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0},
                      'test': {'mse': [], 'mse_wav': [], 'spec_mse': [], 'rt60': [], 'drr': [], 'c50': [], 'errors': 0}}
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
@@ -197,24 +204,29 @@ def test_model(args, test_points=None, write_errors=True):
             network.eval()
             with torch.no_grad():
                 output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-            phase = output[:, :, :, 1]
-            output = output[:, :, :, 0]
-            phase = (phase.reshape(1, args.components, args.freq_bins, max_len).cpu() * std_phase).numpy()
+            # phase = output[:, :, :, 1]
+            # output = output[:, :, :, 0]
+            # phase = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std_phase).numpy()
             output = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std + mean).numpy()
+
+            # Random phase reconstruction per image2reverb for later parts of the RIR
+            # full_phase = np.zeros([1, args.components, args.freq_bins, max_len])
+            # full_phase[:, :, :, :13] = phase[:, :, :, :13]
+            # np.random.seed(1234)
+            # rp = np.random.uniform(-np.pi, np.pi, [1, args.components, args.freq_bins, max_len - 13])
+            # full_phase[:, :, :, 13:] = rp
 
             # Convert into time domain to calculate most metrics
             # predicted_rir = to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
-            # predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
-            predicted_rir = to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
+            predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
+            # predicted_rir = to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
+            # predicted_rir = to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
             gt_rir = to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
             # plot_stft(phase, phase_data, key)
             # gt_rir = to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
             # t = np.arange(len(gt_rir)) / 16000
             # plt.plot(t, 20*np.log10(abs(gt_rir)))
             # plt.show()
-
-            # band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
-            # todo: use rir filtering to get rirs for each frequency band, and calculate errors for them separately
 
             # Convert from src and rcv points into 'subjects' in the original dataset format
             src, rcv = int(src), int(rcv)
@@ -264,7 +276,7 @@ def test_model(args, test_points=None, write_errors=True):
             # plt.show()
 
             # Plot some examples for checking the results
-            if i < 1:
+            if i < 10:
                 plot_stft(output, spec_data, key)
                 plot_wave(predicted_rir[0], gt_rir[0], key)
                 # plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
