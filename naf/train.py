@@ -136,7 +136,7 @@ def train_net(rank, world_size, freeport, args):
                 time_embed = time_embedder(times)
                 time_embed_ph = time_embedder(times_ph)
 
-            total_in = torch.cat((position_embed, freq_embed, time_embed, time_embed_ph), dim=2)
+            total_in = torch.cat((position_embed, freq_embed, time_embed), dim=2)
             optimizer.zero_grad(set_to_none=False)
             try:
                 output = ddp_auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
@@ -144,16 +144,16 @@ def train_net(rank, world_size, freeport, args):
                 print(gt.shape, degree.shape, position.shape, freqs.shape, times.shape, position_embed.shape,
                       freq_embed.shape, time_embed.shape)
                 quit(e)
-            out_spec = output[:, :, :, 0]
-            out_phase = output[:, :, :, 1]
-            a = 1.0  # todo: check scaling
-            loss = criterion(out_spec, gt)
-            loss_ph = criterion(out_phase, phase)
+            # out_spec = output  # [:, :, :, 0]
+            # out_phase = output[:, :, :, 1]
+            # a = 1.0  # todo: check scaling
+            loss = criterion(output, gt)
+            # loss_ph = criterion(out_phase, phase)
             if rank == 0:
-                total_losses += loss.detach() + loss_ph.detach()
-                progress.set_description(f' mag loss: {loss.detach():.6f}, phase loss: {loss_ph.detach():.6f}')
+                total_losses += loss.detach()  # + loss_ph.detach()
+                progress.set_description(f' mag loss: {loss.detach():.6f}')  # , phase loss: {0:.6f}')
                 cur_iter += 1
-            loss = loss + a * loss_ph
+            # loss = loss + a * loss_ph
             loss.backward()
             optimizer.step()
         decay_rate = args.lr_decay

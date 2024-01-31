@@ -45,7 +45,7 @@ class Soundsamples(torch.utils.data.Dataset):
         self.sound_files = {'0': [], '90': [], '180': [], '270': []}
         self.sound_files_test = {'0': [], '90': [], '180': [], '270': []}
 
-        train_test_split_path = os.path.join(arg_stuff.split_loc, arg_stuff.apt + '_complete.pkl')
+        train_test_split_path = os.path.join(arg_stuff.split_loc, arg_stuff.apt + '_complete.pkl')  # change this to f and also fix in options.py
         with open(train_test_split_path, 'rb') as train_test_file_obj:
             train_test_split = pickle.load(train_test_file_obj)
 
@@ -115,7 +115,7 @@ class Soundsamples(torch.utils.data.Dataset):
             # 2, freq, time
             sound_size = spec_data.shape
             selected_time = np.random.randint(0, sound_size[2], self.num_samples)
-            selected_time_ph = np.random.randint(0, 13, self.num_samples)  # only select phase from the beginning, corresponding to ~0-50ms (.5×13×128÷16000), todo: problems due to being different from 'actual' times?
+            selected_time_ph = np.random.randint(0, 13, self.num_samples)  # only select phase from the beginning, corresponding to ~0-50ms (.5×13×128÷16000)
             selected_freq = np.random.randint(0, sound_size[1], self.num_samples)
             degree = orientation_idx
 
@@ -130,7 +130,7 @@ class Soundsamples(torch.utils.data.Dataset):
             total_non_norm_position = torch.cat((torch.from_numpy(non_norm_start)[None], torch.from_numpy(non_norm_end)[None]), dim=1).float()
 
             selected_total = spec_data[:, selected_freq, selected_time]
-            selected_total_phase = phase_data[:, selected_freq, selected_time_ph]
+            selected_total_phase = phase_data[:, selected_freq, selected_time]
             loaded = True
 
         return (selected_total, selected_total_phase, degree, total_position, total_non_norm_position,

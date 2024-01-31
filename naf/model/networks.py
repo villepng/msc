@@ -26,7 +26,7 @@ class KernelLinearAct(nn.Module):
 
 
 class KernelResidualFCEmbeds(nn.Module):
-    def __init__(self, input_ch, intermediate_ch=512, grid_ch=64, num_block=8, output_ch=2, grid_gap=0.25, grid_bandwidth=0.25, bandwidth_min=0.1,
+    def __init__(self, input_ch, intermediate_ch=512, grid_ch=64, num_block=8, output_ch=1, grid_gap=0.25, grid_bandwidth=0.25, bandwidth_min=0.1,
                  bandwidth_max=0.5, float_amt=0.1, min_xy=None, max_xy=None, probe=False, components=1):
         super(KernelResidualFCEmbeds, self).__init__()
         # input_ch (int): number of ch going into the network
@@ -42,8 +42,8 @@ class KernelResidualFCEmbeds(nn.Module):
         for k in range(4):
             self.register_parameter('rot_{}'.format(k), nn.Parameter(torch.randn(num_block - 1, 1, 1, intermediate_ch) / math.sqrt(intermediate_ch), requires_grad=True))
 
-        self.proj = BasicProject2(input_ch + int(2 * grid_ch) + 21, intermediate_ch)
-        self.residual_1 = nn.Sequential(BasicProject2(input_ch + 128 + 21, intermediate_ch), nn.LeakyReLU(negative_slope=0.1), BasicProject2(intermediate_ch, intermediate_ch))
+        self.proj = BasicProject2(input_ch + int(2 * grid_ch), intermediate_ch)
+        self.residual_1 = nn.Sequential(BasicProject2(input_ch + 128, intermediate_ch), nn.LeakyReLU(negative_slope=0.1), BasicProject2(intermediate_ch, intermediate_ch))
         self.layers = torch.nn.ModuleList()
         for k in range(num_block - 2):
             self.layers.append(KernelLinearAct(intermediate_ch, intermediate_ch))
