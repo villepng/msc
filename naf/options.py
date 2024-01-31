@@ -51,7 +51,7 @@ class Options:
         parser = self.parser
         parser.add_argument('--apt', default='test_1', choices=['test_1'], type=str)
         parser.add_argument('--grid', default='20x10', type=str)
-        parser.add_argument('--order', default='0')
+        parser.add_argument('--order', default='1')
         parser.add_argument('--exp_name', default='{}')
         parser.add_argument('--model_save_loc', type=str, help='change this to test with a grid of points different from training')
 
