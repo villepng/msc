@@ -236,15 +236,15 @@ def test_model(args, test_points=None, write_errors=True):
                 subj = src * args.subj_offset + rcv
             fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
             fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
-            normalize = False
+            normalize = True
             reverb_pred = []
-            if normalize:
-                for j in range(args.components):
-                    reverb_pred.append(fftconvolve(mono, predicted_rir[j, :]))
+            for j in range(args.components):
+                reverb_pred.append(fftconvolve(mono, predicted_rir[j, :]))
+                if normalize:
                     with np.nditer(reverb_pred[j], op_flags=['readwrite']) as it:  # normalize based on dataset data
                         for x in it:
                             x[...] = x / max_val
-                reverb_pred = np.array(reverb_pred).T
+            reverb_pred = np.array(reverb_pred).T
 
             # Filter and calculate error metrics for each frequency band
             for k in range(args.components):
@@ -281,7 +281,7 @@ def test_model(args, test_points=None, write_errors=True):
                 # plt.show()
 
             # Plot some examples for checking the results
-            if i < 10:
+            if i < 1:
                 plot_stft(output, spec_data, key)
                 plot_wave(predicted_rir[0], gt_rir[0], key)
                 # plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
@@ -296,7 +296,10 @@ def test_model(args, test_points=None, write_errors=True):
                 plot_wave(predicted_rir[0], gt_rir[0], key)
                 # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                 pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
-                wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, reverb_pred.astype(np.float32))
+                if normalize:
+                    wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, reverb_pred.astype(np.float32))
+                else:
+                    wavfile.write(f'{args.wav_loc}/pred_{key}_s{subj}.wav', fs, reverb_pred.astype(np.int16))
 
     spec_obj.close()
     phase_obj.close()
