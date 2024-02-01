@@ -55,8 +55,8 @@ def main():
     if args.type == 'dataset':
         save_path = f'{parent_dir}/{args.save_path}/order_{order}/dataset'
         data_path_obj = pathlib.Path(f'{parent_dir}/{args.data_path}/ambisonics_{args.order}_{args.grid}/trainset')
-        subjects = len([p for p in data_path_obj.iterdir() if p.is_dir()])
-        subjects = 20  # maybe add this as a parameter when testing dataset
+        # subjects = len([p for p in data_path_obj.iterdir() if p.is_dir()])
+        subjects = 200  # maybe add this as a parameter when testing dataset
         progress = tqdm.tqdm(range(1, subjects + 1))  # subject indexing starts from 1 due to how the ML method is set up
     else:
         save_path = f'{parent_dir}/{args.save_path}/order_{order}/prediction'
