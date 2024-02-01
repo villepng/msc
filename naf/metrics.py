@@ -103,8 +103,9 @@ def get_edc(rir, normalize=True):
     edc = np.flip(rir2_flipped_csum)
     if normalize:
         edc = edc / edc[0]
-    edc_db = 10 * np.log10(edc)  # zero division issues?
-
+    with np.errstate(divide='ignore'):  # ignore rare cases where 0 is encountered
+        edc_db = 10 * np.log10(edc)
+    edc_db[np.isneginf(edc_db)] = np.min(edc_db)
     return edc, edc_db
 
 
