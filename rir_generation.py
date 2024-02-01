@@ -8,6 +8,7 @@ import sys
 import tqdm
 
 from masp import shoebox_room_sim as srs
+from naf.metrics import filter_rir
 from scipy.io import wavfile
 from scipy.signal import fftconvolve
 
@@ -129,6 +130,17 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                 sh_rirs = sh_rirs[500:-1, :]  # Remove delay from filtering, not needed with basic absorption
                 sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
                 RIRS.update({f'{i}-{j}': sh_rirs})
+
+                tt = np.tile(sh_rirs[:, 0], (6, 1)).T
+                # tt = sh_rirs[:, 0]
+                ff0 = filter_rir(tt, np.array([125, 250, 500, 1000, 2000, 4000]), fs)
+                plt.figure()
+                plt.plot(ff0)
+                plt.figure()
+                plt.plot(sh_rirs[:, 0])
+                #plt.plot(ff1)
+                #plt.plot(ff2)
+                plt.show()
 
             # Apply RIRs, check min/max for normalization and store metadata, currently mono is not normalized as it's only used for listening
             subject = data_index + 1
