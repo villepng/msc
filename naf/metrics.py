@@ -1,5 +1,50 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy
+
+from naf.data_loading.data_maker import GetSpec
+
+
+def filter_rir(rir, f_center, fs):
+    bands = len(f_center)
+    order = 1000
+    filters = np.zeros((order + 1, bands))
+    for i in range(bands):
+        if i == 0:
+            fl = 30.
+            fh = np.sqrt(f_center[i] * f_center[i + 1])
+            wl = fl / (fs / 2.)
+            wh = fh / (fs / 2.)
+            filters[:, i] = scipy.signal.firwin(order + 1, [wl, wh], pass_zero='bandpass')
+        elif i == bands - 1:
+            fl = np.sqrt(f_center[i] * f_center[i - 1])
+            w = fl / (fs / 2.)
+            filters[:, i] = scipy.signal.firwin(order + 1, w, pass_zero='highpass')
+        else:
+            fl = np.sqrt(f_center[i] * f_center[i - 1])
+            fh = np.sqrt(f_center[i] * f_center[i + 1])
+            wl = fl / (fs / 2.)
+            wh = fh / (fs / 2.)
+            filters[:, i] = scipy.signal.firwin(order + 1, [wl, wh], pass_zero='bandpass')
+
+    import matplotlib.pyplot as plt
+    # plt.plot(filters)
+    # plt.show()
+    temp_rir = np.append(rir, np.zeros((order, bands)), axis=0)
+    rir_filt = scipy.signal.fftconvolve(filters, temp_rir, axes=0)[:temp_rir.shape[0], :]
+    # rir_full = np.sum(rir_filt, axis=1)[:, np.newaxis]
+    spec_getter = GetSpec(components=6)
+    real_spec, img_spec, raw_phase = spec_getter.transform(rir_filt.T)
+    f, axarr = plt.subplots(3, 2)
+    axarr[0, 0].imshow(real_spec[0])
+    axarr[0, 1].imshow(real_spec[1])
+    axarr[1, 0].imshow(real_spec[2])
+    axarr[1, 1].imshow(real_spec[3])
+    axarr[2, 0].imshow(real_spec[4])
+    axarr[2, 1].imshow(real_spec[5])
+    f.show()
+
+    return rir_filt
 
 
 def get_c50(rir, delay, fs=16000):
