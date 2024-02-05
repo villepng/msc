@@ -168,9 +168,9 @@ def print_errors(error_metrics):  # train, channel, band, metric
             print(f'  channel {channel}')
             # if len(error_metrics[train_test][channel]["mse_wav"]) > 0:  # add if necessary
             for data in error_metrics[train_test][channel]:
-                if data in METRICS_CHANNEL:
+                if data in METRICS_CHANNEL and data != 'mse_wav':
                     print(f'    avg. channel {data.upper()[:-1]}: {np.average(error_metrics[train_test][channel][data]):.6f}')
-                if data not in METRICS_CHANNEL:
+                else:
                     print(f'    band: {data}')
                     for metric in error_metrics[train_test][channel][data]:
                         if len(error_metrics[train_test][channel][data][metric]) > 0:
@@ -287,7 +287,6 @@ def test_model(args, test_points=None, write_errors=True):
             # Filter and calculate error metrics
             for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
                 # Overall error metrics for each component
-                ll = output[:, 0]
                 error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
                 error_metrics[train_test][component]['mse_'].append(np.abs(np.subtract(predicted_rir[component], gt_rir[component])).mean())
                 # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo check which is longer and slice
@@ -304,6 +303,20 @@ def test_model(args, test_points=None, write_errors=True):
                 c50_pred = 10 * np.log10(metrics.get_c50(predicted_rir[component], delay))
                 c50_gt = 10 * np.log10(metrics.get_c50(gt_rir[component], delay))
                 error_metrics[train_test][component]['c50_'].append(abs(c50_gt - c50_pred) / c50_gt)
+
+                '''t = np.arange(len(edc_db_gt)) / fs
+                plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
+                plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
+                plt.plot(t, np.ones(np.size(t)) * -60)
+                plt.scatter(rt60_pred, -60, label='Predicted RT60')
+                plt.scatter(rt60_gt, -60, label='GT RT60')
+                # measure_rt60(predicted_rir[component], fs, 60, True)
+                # measure_rt60(predicted_rir[component], fs, 30, True)
+                # plt.scatter(measure_rt60(predicted_rir[component], fs, 60), -60, label='Predicted RT60 PRA')
+                # plt.scatter(measure_rt60(gt_rir[component], fs, 60), -60, label='GT RT60 PRA')
+                plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv})')
+                plt.legend()
+                plt.show()'''
 
                 # Filtering
                 rir_bands = np.tile(predicted_rir[component], (bands, 1)).T
@@ -327,18 +340,6 @@ def test_model(args, test_points=None, write_errors=True):
                     c50_pred = 10 * np.log10(metrics.get_c50(filtered_pred[:, band], delay))
                     c50_gt = 10 * np.log10(metrics.get_c50(filtered_gt[:, band], delay))
                     error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
-
-                    # t = np.arange(len(edc_db_gt)) / fs
-                    # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
-                    # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
-                    # plt.plot(t, np.ones(np.size(t)) * -60)
-                    # plt.scatter(rt60_pred, -60, label='Predicted RT60')
-                    # plt.scatter(rt60_gt, -60, label='GT RT60')
-                    # plt.scatter(measure_rt60(predicted_rir[k], fs, 30), -60, label='Predicted RT60 PRA')
-                    # plt.scatter(measure_rt60(gt_rir[k], fs, 30), -60, label='GT RT60 PRA')
-                    # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
-                    # plt.legend()
-                    # plt.show()
 
             # Plot some examples for checking the results
             if i < 1:
