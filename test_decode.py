@@ -65,7 +65,9 @@ def main():
     rm_tree(pathlib.Path(save_path))  # clear old files
     pathlib.Path(save_path).mkdir(parents=True)
 
-    hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/{args.hrir}', order)
+    # hrir, _ = spa.io.sofa_to_sh(f'{parent_dir}/{args.hrir}', order)
+    hrir = spa.io.load_sofa_hrirs(f'{parent_dir}/{args.hrir}')
+    hrir = spa.decoder.magls_bin(hrir, order)
     progress.set_description('Binauralizing data')
     for i in progress:
         if args.type == 'dataset':
