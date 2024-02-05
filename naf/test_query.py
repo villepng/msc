@@ -19,8 +19,8 @@ from naf.model.networks import KernelResidualFCEmbeds
 from naf.options import Options
 
 
-METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']
-METRICS_CHANNEL = ['spec_err', 'mse_wav']
+METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']  # add spectral error for bands?
+METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
 
 
 def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device):
@@ -166,9 +166,10 @@ def print_errors(error_metrics):  # train, channel, band, metric
         print(f'Errors for {train_test} points')
         for channel in error_metrics[train_test]:
             print(f'  channel {channel}')
-            print(f'    avg. RIR spectral error: {np.average(error_metrics[train_test][channel]["spec_err"]):.6f}')
             # if len(error_metrics[train_test][channel]["mse_wav"]) > 0:  # add if necessary
             for data in error_metrics[train_test][channel]:
+                if data in METRICS_CHANNEL:
+                    print(f'    avg. channel {data.upper()[:-1]}: {np.average(error_metrics[train_test][channel][data]):.6f}')
                 if data not in METRICS_CHANNEL:
                     print(f'    band: {data}')
                     for metric in error_metrics[train_test][channel][data]:
@@ -283,16 +284,34 @@ def test_model(args, test_points=None, write_errors=True):
                                 x[...] = x / max_val
                 reverb_pred = np.array(reverb_pred).T
 
-            # Filter and calculate error metrics for each frequency band
-            for component in range(args.components):
-                error_metrics[train_test][component]['spec_err'].append(np.abs(np.subtract(output[0], spec_data[0])).mean())
+            # Filter and calculate error metrics
+            for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
+                # Overall error metrics for each component
+                ll = output[:, 0]
+                error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
+                error_metrics[train_test][component]['mse_'].append(np.abs(np.subtract(predicted_rir[component], gt_rir[component])).mean())
                 # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo check which is longer and slice
+                delay = metrics.get_delay_samples(src_pos, rcv_pos)
+                _, edc_db_pred = metrics.get_edc(predicted_rir[component])
+                rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
+                _, edc_db_gt = metrics.get_edc(gt_rir[component])
+                rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
+                error_metrics[train_test][component]['rt60_'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
 
+                drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[component], delay))
+                drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[component], delay))
+                error_metrics[train_test][component]['drr_'].append(abs(drr_gt - drr_pred) / drr_gt)
+                c50_pred = 10 * np.log10(metrics.get_c50(predicted_rir[component], delay))
+                c50_gt = 10 * np.log10(metrics.get_c50(gt_rir[component], delay))
+                error_metrics[train_test][component]['c50_'].append(abs(c50_gt - c50_pred) / c50_gt)
+
+                # Filtering
                 rir_bands = np.tile(predicted_rir[component], (bands, 1)).T
                 rir_bands_gt = np.tile(gt_rir[component], (bands, 1)).T
                 filtered_pred = metrics.filter_rir(rir_bands, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
                 filtered_gt = metrics.filter_rir(rir_bands_gt, band_centerfreqs, fs)
 
+                # Error metrics for each frequency band
                 for band in range(bands):
                     error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(
                         np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
@@ -302,7 +321,6 @@ def test_model(args, test_points=None, write_errors=True):
                     rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
                     error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)  # todo: test with prm to 30 dB to match naf
 
-                    delay = metrics.get_delay_samples(src_pos, rcv_pos)
                     drr_pred = 10 * np.log10(metrics.get_drr(filtered_pred[:, band], delay))
                     drr_gt = 10 * np.log10(metrics.get_drr(filtered_gt[:, band], delay))
                     error_metrics[train_test][component][band_centerfreqs[band]]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
