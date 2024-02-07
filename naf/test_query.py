@@ -326,13 +326,23 @@ def test_model(args, test_points=None, write_errors=True):
 
                 # Error metrics for each frequency band
                 for band in range(bands):
-                    error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(
-                        np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
+                    error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
                     _, edc_db_pred = metrics.get_edc(filtered_pred[:, band])
                     rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                     _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
                     rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
-                    error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)  # todo: test with prm to 30 dB to match naf
+                    error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+                    '''t = np.arange(len(edc_db_gt)) / fs
+                    plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
+                    plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
+                    plt.plot(t, np.ones(np.size(t)) * -60)
+                    plt.scatter(rt60_pred, -60, label='Predicted RT60')
+                    plt.scatter(rt60_gt, -60, label='GT RT60')
+                    # measure_rt60(filtered_pred[:, band], fs, 30, True)
+                    # measure_rt60(filtered_gt[:, band], fs, 30, True)
+                    plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv}, {component}-{band})')
+                    plt.legend()
+                    plt.show()'''
 
                     drr_pred = 10 * np.log10(metrics.get_drr(filtered_pred[:, band], delay))
                     drr_gt = 10 * np.log10(metrics.get_drr(filtered_gt[:, band], delay))
