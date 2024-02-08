@@ -253,8 +253,8 @@ def test_model(args, test_points=None, write_errors=True):
             # full_phase[:, :, :, 13:] = rp
 
             # Convert into time domain to calculate most metrics
-            # predicted_rir = to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
-            predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
+            predicted_rir = to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
+            # predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
             # predicted_rir = to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
             # predicted_rir = to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
             gt_rir = to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
@@ -324,8 +324,10 @@ def test_model(args, test_points=None, write_errors=True):
                 filtered_pred = metrics.filter_rir(rir_bands, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
                 filtered_gt = metrics.filter_rir(rir_bands_gt, band_centerfreqs, fs)
 
+                # plot_wave(predicted_rir[component], gt_rir[component], f'{src}-{rcv}, ch{component}')
                 # Error metrics for each frequency band
                 for band in range(bands):
+                    # plot_wave(filtered_pred[:, band], filtered_gt[:, band], f'{src}-{rcv}, {component}-{band}')
                     error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
                     _, edc_db_pred = metrics.get_edc(filtered_pred[:, band])
                     rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)

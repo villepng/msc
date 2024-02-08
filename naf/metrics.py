@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 
-from naf.data_loading.data_maker import GetSpec
+# from naf.data_loading.data_maker import GetSpec
 
 
 def filter_rir(rir, f_center, fs):
