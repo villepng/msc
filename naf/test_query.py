@@ -243,7 +243,7 @@ def test_model(args, test_points=None, write_errors=True):
     bands = len(band_centerfreqs)
     error_metrics = get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
 
-    for train_test, keys in {'test': test_keys[orientation]}.items():  # 'train': train_keys[orientation],
+    for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)
         progress.set_description(f'Polling network to calculate error metrics at {train_test} data points')
         for i, key in enumerate(progress):
@@ -316,12 +316,12 @@ def test_model(args, test_points=None, write_errors=True):
             if args.components > 1:
                 error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
                 error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
-                metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, delay, error_metrics, train_test)
-                ild, icc = metrics.get_binaural_error_metrics(predicted_rir, gt_rir, RNG)
+                metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, RNG, delay, error_metrics, train_test)
+                ild, icc = metrics.get_binaural_error_metrics(predicted_rir, gt_rir, RNG, src, rcv)
                 error_metrics['directional'][train_test]['ild'].append(ild)
                 error_metrics['directional'][train_test]['icc'].append(icc)
 
-            if args.components == -1:
+            if True:
                 # Filter and calculate error metrics
                 for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
                     # Overall error metrics for each component
