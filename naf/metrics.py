@@ -47,6 +47,35 @@ def filter_rir(rir, f_center, fs):
     return rir_filt[500:-1, :]  # remove filtering delay
 
 
+def get_ambisonic_edc_err(pred_rir, gt_rir, cutoff=0.29, fs=16000):
+    """
+    :param pred_rir: ambisonic rir as [chn, len]
+    :param gt_rir: ambisonic rir as [chn, len]
+    :param cutoff: only use edc until this point (seconds), as it decays too fast afterwards
+    :param fs: sample rate of the rirs
+    :return:
+    """
+    cutoff = int(cutoff * fs)  # 0.29s seems fine for the most part
+    edc_err = 0
+    for channel in range(pred_rir.shape[0]):
+        _, edc_db_pred = get_edc(pred_rir[channel])
+        _, edc_db_gt = get_edc(gt_rir[channel])
+        edc_err += np.abs(edc_db_pred[:cutoff] - edc_db_gt[:cutoff])
+    return np.mean(edc_err)
+
+
+def get_ambisonic_energy_err(pred_rir, gt_rir):
+    """
+    :param pred_rir: ambisonic rir as [chn, len]
+    :param gt_rir: ambisonic rir as [chn, len]
+    :return: ambisonic energy as sum of all channel energies
+    """
+    e_mse = 0
+    for channel in range(pred_rir.shape[0]):  # doesn't really need a loop to be tbh
+        e_mse += np.square(pred_rir[channel]) - np.square(gt_rir[channel])
+    return np.mean(e_mse)
+
+
 def get_c50(rir, delay, fs=16000):
     l_5ms = int(0.005 * fs)
     start = max(delay - l_5ms, 0)
@@ -72,6 +101,25 @@ def get_delay_samples(src, rcv, fs=16000, v=343):
     return int(np.sum(distances) / v * fs)
 
 
+def get_rir_direction_err(pred_rir, gt_rir):
+    """ Currently only works with 1st order ambisonics
+    :param pred_rir: [chn, len]
+    :param gt_rir: [chn, len]
+    :return:
+    """
+    if pred_rir.shape[0] != 4 or gt_rir.shape[0] != 4:
+        raise NotImplementedError('RIRs must be 1st order ambisonics')
+    # elevation = 0  # currently not used
+    azimuth = np.pi  # todo: random with set seed, certain angles?
+    beamer = np.array([1, np.sin(azimuth) * 1, 0, np.cos(azimuth) * 1])
+    dir_rir_pred = []
+    dir_rir_gt = []
+    for channel in range(pred_rir.shape[0]):
+        dir_rir_pred += pred_rir[channel] * beamer[channel]
+        dir_rir_gt += gt_rir[channel] * beamer[channel]
+    # add normal metrics here
+
+
 def get_drr(rir, delay, fs=16000):
     l_5ms = int(0.005 * fs)
     start = max(delay - l_5ms, 0)
@@ -94,7 +142,11 @@ def get_drr(rir, delay, fs=16000):
 
 
 def get_edc(rir, normalize=True):
-    # compute the inverse cumulative sum of the squared RIR (that's the EDC)
+    """ Compute the inverse cumulative sum of the squared RIR (that's the EDC)
+    :param rir: single-channel rir
+    :param normalize:
+    :return:
+    """
     rir2_flipped = np.flip(rir ** 2)
     rir2_flipped_csum = np.zeros(np.size(rir))
     rir2_flipped_csum[0] = rir2_flipped[0]
@@ -128,7 +180,7 @@ def get_rt_from_edc(edc_db, fs, offset_db=15, rt_interval_db=20):
     x2 = t[idx2]
     a = (y2 - y1) / (x2 - x1)
     b = y1 - a * x1
-    rt60 = (-60 - b) / a
+    rt60 = -60 / a
 
     '''t2 = np.arange(rt60 * fs) / fs
     plt.plot(t, edc_db)

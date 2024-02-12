@@ -21,6 +21,7 @@ from naf.options import Options
 
 METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']  # add spectral error for bands?
 METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
+METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
 
 
 def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device):
@@ -46,7 +47,7 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
 
 
 def get_error_metric_dict(components, band_centerfreqs):
-    global METRICS_BAND, METRICS_CHANNEL
+    global METRICS_BAND, METRICS_CHANNEL, METRICS_DIRECTIONAL
     error_metrics = {'train': {}, 'test': {}}
     for train_test in ['train', 'test']:
         for channel in range(components):
@@ -253,8 +254,8 @@ def test_model(args, test_points=None, write_errors=True):
             # full_phase[:, :, :, 13:] = rp
 
             # Convert into time domain to calculate most metrics
-            predicted_rir = to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
-            # predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
+            # predicted_rir = to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
+            predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
             # predicted_rir = to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
             # predicted_rir = to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
             gt_rir = to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
@@ -284,74 +285,81 @@ def test_model(args, test_points=None, write_errors=True):
                                 x[...] = x / max_val
                 reverb_pred = np.array(reverb_pred).T
 
-            # Filter and calculate error metrics
-            for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
-                # Overall error metrics for each component
-                error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
-                error_metrics[train_test][component]['mse_'].append(np.abs(np.subtract(predicted_rir[component], gt_rir[component])).mean())
-                # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo check which is longer and slice
-                delay = metrics.get_delay_samples(src_pos, rcv_pos)
-                _, edc_db_pred = metrics.get_edc(predicted_rir[component])
-                rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
-                _, edc_db_gt = metrics.get_edc(gt_rir[component])
-                rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
-                error_metrics[train_test][component]['rt60_'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+            # Calculate ambisonic error metrics
+            if args.components > 1:
+                tt = metrics.get_ambisonic_energy_err(predicted_rir, gt_rir)
+                tt2 = metrics.get_ambisonic_edc_err(predicted_rir, gt_rir)
 
-                drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[component], delay))
-                drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[component], delay))
-                error_metrics[train_test][component]['drr_'].append(abs(drr_gt - drr_pred) / drr_gt)
-                c50_pred = 10 * np.log10(metrics.get_c50(predicted_rir[component], delay))
-                c50_gt = 10 * np.log10(metrics.get_c50(gt_rir[component], delay))
-                error_metrics[train_test][component]['c50_'].append(abs(c50_gt - c50_pred) / c50_gt)
-
-                '''t = np.arange(len(edc_db_gt)) / fs
-                plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
-                plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
-                plt.plot(t, np.ones(np.size(t)) * -60)
-                plt.scatter(rt60_pred, -60, label='Predicted RT60')
-                plt.scatter(rt60_gt, -60, label='GT RT60')
-                # measure_rt60(predicted_rir[component], fs, 60, True)
-                # measure_rt60(predicted_rir[component], fs, 30, True)
-                # plt.scatter(measure_rt60(predicted_rir[component], fs, 60), -60, label='Predicted RT60 PRA')
-                # plt.scatter(measure_rt60(gt_rir[component], fs, 60), -60, label='GT RT60 PRA')
-                plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv})')
-                plt.legend()
-                plt.show()'''
-
-                # Filtering
-                rir_bands = np.tile(predicted_rir[component], (bands, 1)).T
-                rir_bands_gt = np.tile(gt_rir[component], (bands, 1)).T
-                filtered_pred = metrics.filter_rir(rir_bands, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
-                filtered_gt = metrics.filter_rir(rir_bands_gt, band_centerfreqs, fs)
-
-                # plot_wave(predicted_rir[component], gt_rir[component], f'{src}-{rcv}, ch{component}')
-                # Error metrics for each frequency band
-                for band in range(bands):
-                    # plot_wave(filtered_pred[:, band], filtered_gt[:, band], f'{src}-{rcv}, {component}-{band}')
-                    error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
-                    _, edc_db_pred = metrics.get_edc(filtered_pred[:, band])
+            if args.components == -1:
+                # Filter and calculate error metrics
+                for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
+                    # Overall error metrics for each component
+                    error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
+                    error_metrics[train_test][component]['mse_'].append(np.abs(np.subtract(predicted_rir[component], gt_rir[component])).mean())
+                    # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo check which is longer and slice
+                    delay = metrics.get_delay_samples(src_pos, rcv_pos)
+                    _, edc_db_pred = metrics.get_edc(predicted_rir[component])
                     rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
-                    _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
+                    _, edc_db_gt = metrics.get_edc(gt_rir[component])
                     rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
-                    error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+                    error_metrics[train_test][component]['rt60_'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+
+                    drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[component], delay))
+                    drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[component], delay))
+                    error_metrics[train_test][component]['drr_'].append(abs(drr_gt - drr_pred) / drr_gt)
+                    c50_pred = 10 * np.log10(metrics.get_c50(predicted_rir[component], delay))
+                    c50_gt = 10 * np.log10(metrics.get_c50(gt_rir[component], delay))
+                    error_metrics[train_test][component]['c50_'].append(abs(c50_gt - c50_pred) / c50_gt)
+
                     '''t = np.arange(len(edc_db_gt)) / fs
                     plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                     plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
                     plt.plot(t, np.ones(np.size(t)) * -60)
+                    plt.vlines(0.29, 0, -120)
                     plt.scatter(rt60_pred, -60, label='Predicted RT60')
                     plt.scatter(rt60_gt, -60, label='GT RT60')
-                    # measure_rt60(filtered_pred[:, band], fs, 30, True)
-                    # measure_rt60(filtered_gt[:, band], fs, 30, True)
-                    plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv}, {component}-{band})')
+                    # measure_rt60(predicted_rir[component], fs, 60, True)
+                    # measure_rt60(predicted_rir[component], fs, 30, True)
+                    # plt.scatter(measure_rt60(predicted_rir[component], fs, 60), -60, label='Predicted RT60 PRA')
+                    # plt.scatter(measure_rt60(gt_rir[component], fs, 60), -60, label='GT RT60 PRA')
+                    plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv}), ({component})')
                     plt.legend()
                     plt.show()'''
 
-                    drr_pred = 10 * np.log10(metrics.get_drr(filtered_pred[:, band], delay))
-                    drr_gt = 10 * np.log10(metrics.get_drr(filtered_gt[:, band], delay))
-                    error_metrics[train_test][component][band_centerfreqs[band]]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
-                    c50_pred = 10 * np.log10(metrics.get_c50(filtered_pred[:, band], delay))
-                    c50_gt = 10 * np.log10(metrics.get_c50(filtered_gt[:, band], delay))
-                    error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
+                    # Filtering
+                    rir_bands = np.tile(predicted_rir[component], (bands, 1)).T
+                    rir_bands_gt = np.tile(gt_rir[component], (bands, 1)).T
+                    filtered_pred = metrics.filter_rir(rir_bands, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
+                    filtered_gt = metrics.filter_rir(rir_bands_gt, band_centerfreqs, fs)
+
+                    # plot_wave(predicted_rir[component], gt_rir[component], f'{src}-{rcv}, ch{component}')
+                    # Error metrics for each frequency band
+                    for band in range(bands):
+                        # plot_wave(filtered_pred[:, band], filtered_gt[:, band], f'{src}-{rcv}, {component}-{band}')
+                        error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
+                        _, edc_db_pred = metrics.get_edc(filtered_pred[:, band])
+                        rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
+                        _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
+                        rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
+                        error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+                        '''t = np.arange(len(edc_db_gt)) / fs
+                        plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
+                        plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
+                        plt.plot(t, np.ones(np.size(t)) * -60)
+                        plt.scatter(rt60_pred, -60, label='Predicted RT60')
+                        plt.scatter(rt60_gt, -60, label='GT RT60')
+                        # measure_rt60(filtered_pred[:, band], fs, 30, True)
+                        # measure_rt60(filtered_gt[:, band], fs, 30, True)
+                        plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv}, {component}-{band})')
+                        plt.legend()
+                        plt.show()'''
+
+                        drr_pred = 10 * np.log10(metrics.get_drr(filtered_pred[:, band], delay))
+                        drr_gt = 10 * np.log10(metrics.get_drr(filtered_gt[:, band], delay))
+                        error_metrics[train_test][component][band_centerfreqs[band]]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
+                        c50_pred = 10 * np.log10(metrics.get_c50(filtered_pred[:, band], delay))
+                        c50_gt = 10 * np.log10(metrics.get_c50(filtered_gt[:, band], delay))
+                        error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
 
             # Plot some examples for checking the results
             if i < 1:
