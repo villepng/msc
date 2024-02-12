@@ -23,6 +23,8 @@ METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']  # add spectral error for
 METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
 METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
 
+RNG = np.random.default_rng(0)
+
 
 def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device):
     xyz_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2, max_freq=7).to(output_device)
@@ -58,6 +60,18 @@ def get_error_metric_dict(components, band_centerfreqs):
                 error_metrics[train_test][channel].update({band: {}})
                 for metric in METRICS_BAND:
                     error_metrics[train_test][channel][band].update({metric: []})
+    if components > 1:
+        error_metrics.update({'directional': {}})
+        for train_test in ['train', 'test']:
+            error_metrics['directional'].update({train_test: {}})
+            for metric in METRICS_DIRECTIONAL:
+                if metric == 'dir_rir':
+                    error_metrics['directional'][train_test].update({metric: {}})
+                    for submetric in METRICS_BAND[:-1]:
+                        error_metrics['directional'][train_test][metric].update({submetric: []})
+                else:
+                    error_metrics['directional'][train_test].update({metric: []})
+
     return error_metrics
 
 
@@ -163,6 +177,17 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
 
 def print_errors(error_metrics):  # train, channel, band, metric
     global METRICS_CHANNEL
+    if 'directional' in error_metrics:  # directional, train, metric
+        print('Directional error metrics')
+        for train_test in ['train', 'test']:
+            print(f'  Directional errors for {train_test} points')
+            for metric, data in error_metrics['directional'][train_test].items():
+                if metric == 'dir_rir':
+                    print('    Directed RIR errors')
+                    for submetric, value in data.items():
+                        print(f'      avg. {submetric}: {np.average(value):.6f}')
+                else:
+                    print(f'    avg. {metric}: {np.average(data):.6f}')
     for train_test in ['train', 'test']:
         print(f'Errors for {train_test} points')
         for channel in error_metrics[train_test]:
@@ -193,6 +218,7 @@ def print_errors_old(error_metrics):
 
 
 def test_model(args, test_points=None, write_errors=True):
+    global RNG
     apt = args.apt
     max_len = args.max_len[apt]
     weight_path = f'{args.model_save_loc}/{apt}/0200.chkpt'
@@ -217,7 +243,7 @@ def test_model(args, test_points=None, write_errors=True):
     bands = len(band_centerfreqs)
     error_metrics = get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
 
-    for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
+    for train_test, keys in {'test': test_keys[orientation]}.items():  # 'train': train_keys[orientation],
         progress = tqdm.tqdm(keys)
         progress.set_description(f'Polling network to calculate error metrics at {train_test} data points')
         for i, key in enumerate(progress):
@@ -286,30 +312,34 @@ def test_model(args, test_points=None, write_errors=True):
                 reverb_pred = np.array(reverb_pred).T
 
             # Calculate ambisonic error metrics
+            delay = metrics.get_delay_samples(src_pos, rcv_pos)
             if args.components > 1:
-                tt = metrics.get_ambisonic_energy_err(predicted_rir, gt_rir)
-                tt2 = metrics.get_ambisonic_edc_err(predicted_rir, gt_rir)
+                error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
+                error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
+                metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, delay, error_metrics, train_test)
+                ild, icc = metrics.get_binaural_error_metrics(predicted_rir, gt_rir, RNG)
+                error_metrics['directional'][train_test]['ild'].append(ild)
+                error_metrics['directional'][train_test]['icc'].append(icc)
 
             if args.components == -1:
                 # Filter and calculate error metrics
                 for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
                     # Overall error metrics for each component
                     error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
-                    error_metrics[train_test][component]['mse_'].append(np.abs(np.subtract(predicted_rir[component], gt_rir[component])).mean())
+                    error_metrics[train_test][component]['mse_'].append(np.square(np.subtract(predicted_rir[component], gt_rir[component])).mean())
                     # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo check which is longer and slice
-                    delay = metrics.get_delay_samples(src_pos, rcv_pos)
                     _, edc_db_pred = metrics.get_edc(predicted_rir[component])
                     rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                     _, edc_db_gt = metrics.get_edc(gt_rir[component])
                     rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
-                    error_metrics[train_test][component]['rt60_'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+                    error_metrics[train_test][component]['rt60_'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
 
                     drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[component], delay))
                     drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[component], delay))
-                    error_metrics[train_test][component]['drr_'].append(abs(drr_gt - drr_pred) / drr_gt)
+                    error_metrics[train_test][component]['drr_'].append(np.abs(drr_gt - drr_pred) / drr_gt)
                     c50_pred = 10 * np.log10(metrics.get_c50(predicted_rir[component], delay))
                     c50_gt = 10 * np.log10(metrics.get_c50(gt_rir[component], delay))
-                    error_metrics[train_test][component]['c50_'].append(abs(c50_gt - c50_pred) / c50_gt)
+                    error_metrics[train_test][component]['c50_'].append(np.abs(c50_gt - c50_pred) / c50_gt)
 
                     '''t = np.arange(len(edc_db_gt)) / fs
                     plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
@@ -341,7 +371,7 @@ def test_model(args, test_points=None, write_errors=True):
                         rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                         _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
                         rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
-                        error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(abs(rt60_gt - rt60_pred) / rt60_gt)
+                        error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
                         '''t = np.arange(len(edc_db_gt)) / fs
                         plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                         plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
@@ -356,10 +386,10 @@ def test_model(args, test_points=None, write_errors=True):
 
                         drr_pred = 10 * np.log10(metrics.get_drr(filtered_pred[:, band], delay))
                         drr_gt = 10 * np.log10(metrics.get_drr(filtered_gt[:, band], delay))
-                        error_metrics[train_test][component][band_centerfreqs[band]]['drr'].append(abs(drr_gt - drr_pred) / drr_gt)
+                        error_metrics[train_test][component][band_centerfreqs[band]]['drr'].append(np.abs(drr_gt - drr_pred) / drr_gt)
                         c50_pred = 10 * np.log10(metrics.get_c50(filtered_pred[:, band], delay))
                         c50_gt = 10 * np.log10(metrics.get_c50(filtered_gt[:, band], delay))
-                        error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(abs(c50_gt - c50_pred) / c50_gt)
+                        error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(np.abs(c50_gt - c50_pred) / c50_gt)
 
             # Plot some examples for checking the results
             if i < 1:
