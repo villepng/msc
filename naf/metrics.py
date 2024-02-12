@@ -1,8 +1,46 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+import spaudiopy as spa
 
 # from naf.data_loading.data_maker import GetSpec
+
+
+def calculate_directed_rir_errors(pred_rir, gt_rir, delay, error_metrics, train_test, fs=16000):
+    """ Currently only works with 1st order ambisonics
+    :param pred_rir: [chn, len]
+    :param gt_rir: [chn, len]
+    :param delay: sound travel time in samples
+    :param error_metrics: where to save errors
+    :param train_test: save to train or test part
+    :param fs: sample rate
+    :return: None
+    """
+    if pred_rir.shape[0] != 4 or gt_rir.shape[0] != 4:
+        raise NotImplementedError('RIRs must be 1st order ambisonics')
+    # elevation = 0  # currently not used
+    azimuth = np.pi / 4  # todo: random with set seed, certain angles?
+    beamer = np.array([1, np.sin(azimuth) * 1, 0, np.cos(azimuth) * 1])
+    dir_rir_pred = np.zeros([pred_rir.shape[-1]])
+    dir_rir_gt = np.zeros([pred_rir.shape[-1]])
+    for channel in range(pred_rir.shape[0]):
+        dir_rir_pred += pred_rir[channel] * beamer[channel]
+        dir_rir_gt += gt_rir[channel] * beamer[channel]
+
+    # Calculate "normal" metrics for directer RIRs
+    error_metrics['directional'][train_test]['dir_rir']['mse'].append(np.square(dir_rir_pred - dir_rir_gt).mean())
+    _, edc_db_pred = get_edc(dir_rir_pred)
+    rt60_pred = get_rt_from_edc(edc_db_pred, fs)
+    _, edc_db_gt = get_edc(dir_rir_gt)
+    rt60_gt = get_rt_from_edc(edc_db_gt, fs)
+    error_metrics['directional'][train_test]['dir_rir']['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
+
+    drr_pred = 10 * np.log10(get_drr(dir_rir_pred, delay))
+    drr_gt = 10 * np.log10(get_drr(dir_rir_gt, delay))
+    error_metrics['directional'][train_test]['dir_rir']['drr'].append(np.abs(drr_gt - drr_pred) / drr_gt)
+    c50_pred = 10 * np.log10(get_c50(dir_rir_pred, delay))
+    c50_gt = 10 * np.log10(get_c50(dir_rir_gt, delay))
+    error_metrics['directional'][train_test]['dir_rir']['c50'].append(np.abs(c50_gt - c50_pred) / c50_gt)
 
 
 def filter_rir(rir, f_center, fs):
@@ -68,12 +106,49 @@ def get_ambisonic_energy_err(pred_rir, gt_rir):
     """
     :param pred_rir: ambisonic rir as [chn, len]
     :param gt_rir: ambisonic rir as [chn, len]
-    :return: ambisonic energy as sum of all channel energies
+    :return:
     """
-    e_mse = 0
-    for channel in range(pred_rir.shape[0]):  # doesn't really need a loop to be tbh
-        e_mse += np.square(pred_rir[channel]) - np.square(gt_rir[channel])
-    return np.mean(e_mse)
+    e_pred = 0
+    e_gt = 0
+    for channel in range(pred_rir.shape[0]):
+        e_pred += np.square(pred_rir[channel])
+        e_gt += np.square(gt_rir[channel])
+    return np.mean(np.abs(e_pred - e_gt))
+
+
+def get_binaural_error_metrics(pred_rir, gt_rir, rng, fs=16000, order=1):
+    """
+    :param pred_rir: ambisonic rir as [chn, len]
+    :param gt_rir: ambisonic rir as [chn, len]
+    :param rng: random number generator with 0 seed
+    :param fs: sample rate of the rirs
+    :param order: ambisonics order used
+    :return: inter-channel level difference error and interchannel coherence error
+    """
+    hrir = spa.io.load_sofa_hrirs(f'../../data/hrir/mit_kemar_normal_pinna.sofa')  # parameter todo
+    hrir = spa.decoder.magls_bin(hrir, order)
+    brir_pred = spa.decoder.sh2bin(pred_rir, hrir)
+    brir_gt = spa.decoder.sh2bin(gt_rir, hrir)
+    white_noise = rng.standard_normal(1 * fs)
+    bin_pred, bin_gt = [], []
+    for i in range(2):
+        bin_pred.append(scipy.signal.fftconvolve(white_noise, brir_pred[i]))
+        bin_gt.append(scipy.signal.fftconvolve(white_noise, brir_gt[i]))
+
+    '''from scipy.io import wavfile
+    white_noise = white_noise / max(white_noise)
+    bin_pred, bin_gt = np.array(bin_pred), np.array(bin_gt)
+    bin_pred, bin_gt = bin_pred / np.max(bin_pred), bin_gt / np.max(bin_gt)
+    wavfile.write(f'../../data/tmp/mono.wav', fs, white_noise.astype(np.float32))
+    wavfile.write(f'../../data/tmp/bin_pred.wav', fs, np.array(bin_pred).astype(np.float32).T)
+    wavfile.write(f'../../data/tmp/bin_gt.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
+
+    e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_gt[1])), np.sum(np.square(bin_gt[0]))
+
+    ild_err = 10 * np.log10(e_pred_l / e_pred_r) - 10 * np.log10(e_gt_l / e_gt_r)
+    icc_err = np.sum(bin_pred[1] * bin_pred[0]) / np.sqrt(e_pred_l * e_pred_r) - np.sum(bin_gt[1] * bin_gt[0]) / np.sqrt(e_gt_l * e_gt_r)
+
+    return np.abs(ild_err), np.abs(icc_err)
 
 
 def get_c50(rir, delay, fs=16000):
@@ -99,25 +174,6 @@ def get_delay_samples(src, rcv, fs=16000, v=343):
     distances = ((np.array(src) - np.array(rcv)) ** 2) ** (1 / 2)
 
     return int(np.sum(distances) / v * fs)
-
-
-def get_rir_direction_err(pred_rir, gt_rir):
-    """ Currently only works with 1st order ambisonics
-    :param pred_rir: [chn, len]
-    :param gt_rir: [chn, len]
-    :return:
-    """
-    if pred_rir.shape[0] != 4 or gt_rir.shape[0] != 4:
-        raise NotImplementedError('RIRs must be 1st order ambisonics')
-    # elevation = 0  # currently not used
-    azimuth = np.pi  # todo: random with set seed, certain angles?
-    beamer = np.array([1, np.sin(azimuth) * 1, 0, np.cos(azimuth) * 1])
-    dir_rir_pred = []
-    dir_rir_gt = []
-    for channel in range(pred_rir.shape[0]):
-        dir_rir_pred += pred_rir[channel] * beamer[channel]
-        dir_rir_gt += gt_rir[channel] * beamer[channel]
-    # add normal metrics here
 
 
 def get_drr(rir, delay, fs=16000):
