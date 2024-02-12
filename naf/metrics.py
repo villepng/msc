@@ -6,10 +6,11 @@ import spaudiopy as spa
 # from naf.data_loading.data_maker import GetSpec
 
 
-def calculate_directed_rir_errors(pred_rir, gt_rir, delay, error_metrics, train_test, fs=16000):
+def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, train_test, fs=16000):
     """ Currently only works with 1st order ambisonics
     :param pred_rir: [chn, len]
     :param gt_rir: [chn, len]
+    :param rng: random number generator with 0 seed
     :param delay: sound travel time in samples
     :param error_metrics: where to save errors
     :param train_test: save to train or test part
@@ -19,13 +20,24 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, delay, error_metrics, train_
     if pred_rir.shape[0] != 4 or gt_rir.shape[0] != 4:
         raise NotImplementedError('RIRs must be 1st order ambisonics')
     # elevation = 0  # currently not used
-    azimuth = np.pi / 4  # todo: random with set seed, certain angles?
+    azimuth = rng.uniform(0, 2 * np.pi)  # randomly select the angle for each point
     beamer = np.array([1, np.sin(azimuth) * 1, 0, np.cos(azimuth) * 1])
     dir_rir_pred = np.zeros([pred_rir.shape[-1]])
     dir_rir_gt = np.zeros([pred_rir.shape[-1]])
     for channel in range(pred_rir.shape[0]):
         dir_rir_pred += pred_rir[channel] * beamer[channel]
         dir_rir_gt += gt_rir[channel] * beamer[channel]
+
+    '''from test_query import plot_wave
+    plot_wave(dir_rir_pred, dir_rir_gt, azimuth)
+    from scipy.io import wavfile
+    white_noise = rng.standard_normal(1 * fs)
+    white_noise = white_noise / max(white_noise)
+    bin_pred, bin_gt = scipy.signal.fftconvolve(white_noise, dir_rir_pred), scipy.signal.fftconvolve(white_noise, dir_rir_gt)
+    bin_pred, bin_gt = bin_pred / np.max(bin_pred), bin_gt / np.max(bin_gt)
+    wavfile.write(f'../../data/tmp/mono.wav', fs, white_noise.astype(np.float32))
+    wavfile.write(f'../../data/tmp/pred_{azimuth:.4f}.wav', fs, np.array(bin_pred).astype(np.float32).T)
+    wavfile.write(f'../../data/tmp/gt_{azimuth:.4f}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
 
     # Calculate "normal" metrics for directer RIRs
     error_metrics['directional'][train_test]['dir_rir']['mse'].append(np.square(dir_rir_pred - dir_rir_gt).mean())
@@ -113,10 +125,10 @@ def get_ambisonic_energy_err(pred_rir, gt_rir):
     for channel in range(pred_rir.shape[0]):
         e_pred += np.square(pred_rir[channel])
         e_gt += np.square(gt_rir[channel])
-    return np.mean(np.abs(e_pred - e_gt))
+    return np.mean(np.square(e_pred - e_gt))
 
 
-def get_binaural_error_metrics(pred_rir, gt_rir, rng, fs=16000, order=1):
+def get_binaural_error_metrics(pred_rir, gt_rir, rng, src, rcv, fs=16000, order=1):
     """
     :param pred_rir: ambisonic rir as [chn, len]
     :param gt_rir: ambisonic rir as [chn, len]
@@ -140,11 +152,10 @@ def get_binaural_error_metrics(pred_rir, gt_rir, rng, fs=16000, order=1):
     bin_pred, bin_gt = np.array(bin_pred), np.array(bin_gt)
     bin_pred, bin_gt = bin_pred / np.max(bin_pred), bin_gt / np.max(bin_gt)
     wavfile.write(f'../../data/tmp/mono.wav', fs, white_noise.astype(np.float32))
-    wavfile.write(f'../../data/tmp/bin_pred.wav', fs, np.array(bin_pred).astype(np.float32).T)
-    wavfile.write(f'../../data/tmp/bin_gt.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
+    wavfile.write(f'../../data/tmp/bin_pred_{src}-{rcv}.wav', fs, np.array(bin_pred).astype(np.float32).T)
+    wavfile.write(f'../../data/tmp/bin_gt_{src}-{rcv}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
 
     e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_gt[1])), np.sum(np.square(bin_gt[0]))
-
     ild_err = 10 * np.log10(e_pred_l / e_pred_r) - 10 * np.log10(e_gt_l / e_gt_r)
     icc_err = np.sum(bin_pred[1] * bin_pred[0]) / np.sqrt(e_pred_l * e_pred_r) - np.sum(bin_gt[1] * bin_gt[0]) / np.sqrt(e_gt_l * e_gt_r)
 
