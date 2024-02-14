@@ -102,7 +102,30 @@ def load_pkl(path):
     return loaded_pkl
 
 
-def plot_stft(pred, gt, points):
+def plot_stft_log(pred, gt, points, n_fft=128, fs=16000):  # tmp
+    fig, ax = plt.subplots()
+    img = librosa.display.specshow(pred[0, 0], y_axis='log', x_axis='time', ax=ax, sr=fs, hop_length=n_fft // 2, shading='nearest')
+    ax.set_title('Power spectrogram')
+    fig.colorbar(img, ax=ax, format="%+2.0f dB")
+
+
+def plot_stft(pred, gt, points, n_fft=128, fs=16000):
+    t = np.arange(pred.shape[-1]) / fs * n_fft / 2  # 50% overlap, parametrize?
+    f = np.arange(pred.shape[-2]) / (n_fft / fs)
+    fig, axarr = plt.subplots(1, 3)
+    fig.suptitle(f'Predicted log impulse response {points}', fontsize=16)  # comment out for final plots
+    plot = axarr[0].pcolormesh(t, f, pred[0, 0], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
+    axarr[0].set_title('Predicted')
+    plot2 = axarr[1].pcolormesh(t, f, gt[0, 0], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
+    axarr[1].set_title('Ground-truth')
+    plot3 = axarr[2].pcolormesh(t, f, gt[0, 0] - pred[0, 0], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
+    axarr[2].set_title('Error')
+    plt.setp(axarr, xlabel='Time (s)'), plt.setp(axarr, ylabel='Frequency (Hz)')
+    fig.colorbar(plot, format='%+2.f dB'), fig.colorbar(plot2, format='%+2.f dB'), fig.colorbar(plot3, format='%+2.f dB')
+    plt.show()
+
+
+def plot_stft_imshow(pred, gt, points):
     fig, axarr = plt.subplots(1, 3)
     fig.suptitle(f'Predicted log impulse response {points}', fontsize=16)
     axarr[0].imshow(pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
@@ -119,7 +142,7 @@ def plot_stft(pred, gt, points):
 
 def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     fig, axarr = plt.subplots(3, 1)
-    fig.suptitle(f'Predicted vs. GT {name} between {points}', fontsize=16)
+    fig.suptitle(f'Predicted vs. GT {name} between {points}', fontsize=16)  # comment out for final plots
     max_len = max(np.arange(len(gt)) / sr)
     axarr[0].plot(np.arange(len(pred)) / sr, pred)
     axarr[0].set_xlim([0, max_len])
@@ -133,6 +156,8 @@ def plot_wave(pred, gt, points, name='impulse response', sr=16000):
     axarr[2].set_ylim([None, max(gt) * 1.1])
     axarr[2].set_xlim([0, max_len])
     axarr[2].set_title('Error')
+    plt.ylabel('Amplitude')
+    plt.xlabel('Time (s)')
     plt.show()
 
 
@@ -458,6 +483,7 @@ def to_wave_if(input_stft, input_if, hop_len):
 
 
 if __name__ == '__main__':
+    plt.rcParams.update({'font.size': 22})
     options = Options().parse()
     if options.test_points is not None and not options.recalculate_errors:
         print('Querying model at the wanted points for plotting and audio generation')

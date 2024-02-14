@@ -23,7 +23,8 @@ mic_rirs = srs.render_rirs_mic(abs_echograms, band_centerfreqs, fs).squeeze()
 
 samples = int(1.4 * 16000)
 t = np.arange(samples) / fs
-plt.plot(t, mic_rirs[:samples] * mic_rirs[:samples])
+plt.rcParams.update({'font.size': 22})
+plt.plot(t, mic_rirs[:samples])  # * mic_rirs[:samples])
 plt.xlabel('Time (s)')
 plt.ylabel('Amplitude')
 plt.show()
