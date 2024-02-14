@@ -94,7 +94,7 @@ def train_net(rank, world_size, freeport, args):
             exit()
 
     # We have conditional forward, must set find_unused_parameters to true
-    ddp_auditory_net = DDP(auditory_net, find_unused_parameters=True, device_ids=[rank])
+    ddp_auditory_net = DDP(auditory_net, find_unused_parameters=False, device_ids=[rank])
     criterion = torch.nn.MSELoss()
     criterion_phase = PhaseLoss()  # todo
     orig_container = []

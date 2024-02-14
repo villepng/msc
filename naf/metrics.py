@@ -3,8 +3,6 @@ import numpy as np
 import scipy
 import spaudiopy as spa
 
-# from naf.data_loading.data_maker import GetSpec
-
 
 def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, train_test, fs=16000):
     """ Currently only works with 1st order ambisonics
@@ -19,7 +17,7 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
     """
     if pred_rir.shape[0] != 4 or gt_rir.shape[0] != 4:
         raise NotImplementedError('RIRs must be 1st order ambisonics')
-    # elevation = 0  # currently not used
+    # elevation = 0  # currently not used, if updated change * 1's to * np.cos(elevation)
     azimuth = rng.uniform(0, 2 * np.pi)  # randomly select the angle for each point
     beamer = np.array([1, np.sin(azimuth) * 1, 0, np.cos(azimuth) * 1])
     dir_rir_pred = np.zeros([pred_rir.shape[-1]])
@@ -39,7 +37,7 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
     wavfile.write(f'../../data/tmp/pred_{azimuth:.4f}.wav', fs, np.array(bin_pred).astype(np.float32).T)
     wavfile.write(f'../../data/tmp/gt_{azimuth:.4f}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
 
-    # Calculate "normal" metrics for directer RIRs
+    # Calculate "normal" metrics for directed RIRs
     error_metrics['directional'][train_test]['dir_rir']['mse'].append(np.square(dir_rir_pred - dir_rir_gt).mean())
     _, edc_db_pred = get_edc(dir_rir_pred)
     rt60_pred = get_rt_from_edc(edc_db_pred, fs)
@@ -80,19 +78,20 @@ def filter_rir(rir, f_center, fs):
     temp_rir = np.append(rir, np.zeros((order, bands)), axis=0)
     rir_filt = scipy.signal.fftconvolve(filters, temp_rir, axes=0)[:temp_rir.shape[0], :]
 
-    # import matplotlib.pyplot as plt
-    # # plt.plot(filters)
-    # # plt.show()
-    # spec_getter = GetSpec(components=6)
-    # real_spec, img_spec, raw_phase = spec_getter.transform(rir_filt.T)
-    # f, axarr = plt.subplots(3, 2)
-    # axarr[0, 0].imshow(real_spec[0])
-    # axarr[0, 1].imshow(real_spec[1])
-    # axarr[1, 0].imshow(real_spec[2])
-    # axarr[1, 1].imshow(real_spec[3])
-    # axarr[2, 0].imshow(real_spec[4])
-    # axarr[2, 1].imshow(real_spec[5])
-    # f.show()
+    '''from naf.data_loading.data_maker import GetSpec
+    import matplotlib.pyplot as plt
+    # plt.plot(filters)
+    # plt.show()
+    spec_getter = GetSpec(components=6)
+    real_spec, img_spec, raw_phase = spec_getter.transform(rir_filt.T)
+    f, axarr = plt.subplots(3, 2)
+    axarr[0, 0].imshow(real_spec[0])
+    axarr[0, 1].imshow(real_spec[1])
+    axarr[1, 0].imshow(real_spec[2])
+    axarr[1, 1].imshow(real_spec[3])
+    axarr[2, 0].imshow(real_spec[4])
+    axarr[2, 1].imshow(real_spec[5])
+    f.show()'''
 
     return rir_filt[500:-1, :]  # remove filtering delay
 
