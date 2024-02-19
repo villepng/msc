@@ -4,7 +4,7 @@ import scipy
 import spaudiopy as spa
 
 
-def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, train_test, fs=16000):
+def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, train_test, src_pos, rcv_pos, fs=16000):
     """ Currently only works with 1st order ambisonics
     :param pred_rir: [chn, len]
     :param gt_rir: [chn, len]
@@ -19,6 +19,7 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
         raise NotImplementedError('RIRs must be 1st order ambisonics')
     # elevation = 0  # currently not used, if updated change * 1's to * np.cos(elevation)
     azimuth = rng.uniform(0, 2 * np.pi)  # randomly select the angle for each point
+    # azimuth = np.arctan2(rcv_pos[0] - src_pos[0], rcv_pos[1] - src_pos[1])  # test vs. gt
     beamer = np.array([1, np.sin(azimuth) * 1, 0, np.cos(azimuth) * 1])
     dir_rir_pred = np.zeros([pred_rir.shape[-1]])
     dir_rir_gt = np.zeros([pred_rir.shape[-1]])
@@ -27,15 +28,21 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
         dir_rir_gt += gt_rir[channel] * beamer[channel]
 
     '''from test_query import plot_wave
+    t = np.arange(len(dir_rir_pred)) / fs
+    plt.plot(t, dir_rir_pred, label='directed')
+    plt.plot(t, pred_rir[0], label='omni')
+    plt.title(f'src {src_pos} - rcv {rcv_pos}, angle {azimuth}')
+    plt.legend()
+    plt.show()
     plot_wave(dir_rir_pred, dir_rir_gt, azimuth)
     from scipy.io import wavfile
     white_noise = rng.standard_normal(1 * fs)
     white_noise = white_noise / max(white_noise)
-    bin_pred, bin_gt = scipy.signal.fftconvolve(white_noise, dir_rir_pred), scipy.signal.fftconvolve(white_noise, dir_rir_gt)
+    bin_pred, bin_gt = scipy.signal.fftconvolve(white_noise, dir_rir_pred), scipy.signal.fftconvolve(white_noise, pred_rir[0])
     bin_pred, bin_gt = bin_pred / np.max(bin_pred), bin_gt / np.max(bin_gt)
     wavfile.write(f'../../data/tmp/mono.wav', fs, white_noise.astype(np.float32))
     wavfile.write(f'../../data/tmp/pred_{azimuth:.4f}.wav', fs, np.array(bin_pred).astype(np.float32).T)
-    wavfile.write(f'../../data/tmp/gt_{azimuth:.4f}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
+    wavfile.write(f'../../data/tmp/omni_{azimuth:.4f}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
 
     # Calculate "normal" metrics for directed RIRs
     error_metrics['directional'][train_test]['dir_rir']['mse'].append(np.square(dir_rir_pred - dir_rir_gt).mean())
@@ -152,7 +159,9 @@ def get_binaural_error_metrics(pred_rir, gt_rir, rng, src, rcv, fs=16000, order=
     bin_pred, bin_gt = bin_pred / np.max(bin_pred), bin_gt / np.max(bin_gt)
     wavfile.write(f'../../data/tmp/mono.wav', fs, white_noise.astype(np.float32))
     wavfile.write(f'../../data/tmp/bin_pred_{src}-{rcv}.wav', fs, np.array(bin_pred).astype(np.float32).T)
-    wavfile.write(f'../../data/tmp/bin_gt_{src}-{rcv}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
+    wavfile.write(f'../../data/tmp/bin_gt_{src}-{rcv}.wav', fs, np.array(bin_gt).astype(np.float32).T)
+    plt.plot(white_noise)
+    plt.show()'''
 
     e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_gt[1])), np.sum(np.square(bin_gt[0]))
     ild_err = 10 * np.log10(e_pred_l / e_pred_r) - 10 * np.log10(e_gt_l / e_gt_r)

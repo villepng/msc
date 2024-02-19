@@ -117,6 +117,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
+            if rm_delay:
+                delay_samples = int(((src_pos[0] - recv_pos[0]) ** 2 + (src_pos[1] - recv_pos[1]) ** 2 + (heights[0] - heights[1]) ** 2) ** (1 / 2) / SOUND_V * fs)
 
             # Generate/load SH RIRs
             if f'{i}-{j}' in RIRS:
@@ -128,6 +130,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                     sh_rirs = sh_rirs.reshape(len(sh_rirs), 1)
                 sh_rirs = sh_rirs[500:-1, :]  # Remove delay from filtering, not needed with basic absorption
                 sh_rirs = sh_rirs * np.sqrt(4*np.pi) * get_sn3d_norm_coefficients(order)
+                if rm_delay:
+                    sh_rirs = sh_rirs[delay_samples:-1, :]  # removes last sample as well but it doesn't really matter
                 RIRS.update({f'{i}-{j}': sh_rirs})
 
             # Apply RIRs, check min/max for normalization and store metadata, currently mono is not normalized as it's only used for listening
@@ -139,8 +143,6 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # t = np.arange(len(sh_rirs[:, 0])) / fs
             for k in range(components):
                 # plt.plot(t, sh_rirs[:, k])
-                # plt.plot(sh_rirs[:, k])
-                # reverberant_signal[:, k] = fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze())[:audio_length]
                 reverberant_signal.append(fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze()))
             # plt.show()
             reverberant_signal = np.array(reverberant_signal).T
