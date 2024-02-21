@@ -8,6 +8,10 @@ import pickle
     Various helper functions, mostly for plotting network query results (in test_query.py)
 """
 
+METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']  # add spectral error for bands?
+METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
+METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
+
 
 def load_pkl(path):
     with open(path, 'rb') as loaded_pkl_obj:
