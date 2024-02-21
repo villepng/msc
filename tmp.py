@@ -5,7 +5,7 @@ from masp import shoebox_room_sim as srs
 
 
 room_xyz = np.array([10.0, 6.0, 2.5])
-rec_xyz = np.array([[9.0, 5.0, 1.5]])
+rec_xyz = np.array([[1.0, 5.0, 1.5]])
 src_xyz = np.array([[1.0, 1.0, 1.5]])
 mic_specs = np.array([[1, 0, 0, 1]])
 band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
@@ -18,14 +18,29 @@ abs_wall = np.array([[0.04, 0.04, 0.03, 0.03, 0.02, 0.02],
 nBands = abs_wall.shape[0]
 limits = np.array([1.5, 1.5, 1.5, 1.5, 1.5, 1.5])
 fs = 16000
-abs_echograms = srs.compute_echograms_mic(room_xyz, src_xyz, rec_xyz, abs_wall, limits, mic_specs)
-mic_rirs = srs.render_rirs_mic(abs_echograms, band_centerfreqs, fs).squeeze()
+# abs_echograms = srs.compute_echograms_mic(room_xyz, src_xyz, rec_xyz, abs_wall, limits, mic_specs)
+# mic_rirs = srs.render_rirs_mic(abs_echograms, band_centerfreqs, fs).squeeze()
 
-samples = int(1.4 * 16000)
-t = np.arange(samples) / fs
+abs_echograms = srs.compute_echograms_sh(room_xyz, src_xyz, rec_xyz, abs_wall, limits, 1)
+sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()
+
 plt.rcParams.update({'font.size': 22})
-plt.plot(t, mic_rirs[:samples])  # * mic_rirs[:samples])
-plt.xlabel('Time (s)')
-plt.ylabel('Amplitude')
-plt.show()
-
+if True and 1:
+    t = np.arange(len(sh_rirs[:, 0])) / fs
+    channels = ['W', 'Y', 'Z', 'X']
+    fig, axarr = plt.subplots(2, 2)
+    for channel, subfig in enumerate(axarr.flat):
+        subfig.set_title(f'{channels[channel]} channel')
+        subfig.set_xlim([0, 1.4])
+        subfig.set_ylim([np.min(sh_rirs) * 1.1, np.max(sh_rirs) * 1.1])
+        subfig.plot(t, sh_rirs[:, channel])
+        subfig.set_ylabel('Amplitude')
+        subfig.set_xlabel('Time (s)')
+    plt.show()
+else:
+    samples = int(1.4 * 16000)
+    t = np.arange(samples) / fs
+    # plt.plot(t, mic_rirs[:samples])  # * mic_rirs[:samples])
+    plt.xlabel('Time (s)')
+    plt.ylabel('Amplitude')
+    plt.show()
