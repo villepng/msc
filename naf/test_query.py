@@ -160,6 +160,7 @@ def test_model(args, test_points=None, write_errors=True):
     # Polling the network to calculate error metrics
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
+    wave_mse_window = 50 * 16  # Calculate waveform MSE for 50ms after direct sound
     error_metrics = get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
 
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
@@ -199,8 +200,8 @@ def test_model(args, test_points=None, write_errors=True):
             # full_phase[:, :, :, 13:] = rp
 
             # Convert into time domain to calculate most metrics
-            predicted_rir = utl.to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
-            # predicted_rir = utl.to_wave(output[0], args.hop_len)  # [channels, length], random phase
+            # predicted_rir = utl.to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
+            predicted_rir = utl.to_wave(output[0], args.hop_len)  # [channels, length], random phase
             # predicted_rir = utl.to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
             # predicted_rir = utl.to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
             gt_rir = utl.to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
@@ -232,6 +233,7 @@ def test_model(args, test_points=None, write_errors=True):
 
             # Calculate ambisonic error metrics
             delay = metrics.get_delay_samples(src_pos, rcv_pos)
+            win_end = delay + wave_mse_window
             if args.components > 1:
                 error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
                 error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
@@ -245,7 +247,7 @@ def test_model(args, test_points=None, write_errors=True):
                 for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
                     # Overall error metrics for each component
                     error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
-                    error_metrics[train_test][component]['mse_'].append(np.square(np.subtract(predicted_rir[component], gt_rir[component])).mean())
+                    error_metrics[train_test][component]['mse_'].append(np.square(np.subtract(predicted_rir[component, delay:win_end], gt_rir[component, delay:win_end])).mean())
                     # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo check which is longer and slice
                     _, edc_db_pred = metrics.get_edc(predicted_rir[component])
                     rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
@@ -285,7 +287,7 @@ def test_model(args, test_points=None, write_errors=True):
                     # Error metrics for each frequency band
                     for band in range(bands):
                         # plot_wave(filtered_pred[:, band], filtered_gt[:, band], f'{src}-{rcv}, {component}-{band}')
-                        error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
+                        error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[delay:win_end, band], filtered_gt[delay:win_end, band])).mean())
                         _, edc_db_pred = metrics.get_edc(filtered_pred[:, band])
                         rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
                         _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
