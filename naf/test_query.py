@@ -192,12 +192,12 @@ def test_model(args, test_points=None, write_errors=True):
             # phase = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std_phase).numpy()
             output = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std + mean).numpy()
 
-            # Random phase reconstruction per image2reverb for later parts of the RIR
-            # full_phase = np.zeros([1, args.components, args.freq_bins, max_len])
-            # full_phase[:, :, :, :13] = phase[:, :, :, :13]
-            # np.random.seed(1234)
-            # rp = np.random.uniform(-np.pi, np.pi, [1, args.components, args.freq_bins, max_len - 13])
-            # full_phase[:, :, :, 13:] = rp
+            ''''# Random phase reconstruction per image2reverb for later parts of the RIR
+            full_phase = np.zeros([1, args.components, args.freq_bins, max_len])
+            full_phase[:, :, :, :13] = phase[:, :, :, :13]
+            np.random.seed(1234)
+            rp = np.random.uniform(-np.pi, np.pi, [1, args.components, args.freq_bins, max_len - 13])
+            full_phase[:, :, :, 13:] = rp'''
 
             # Convert into time domain to calculate most metrics
             # predicted_rir = utl.to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
@@ -242,9 +242,9 @@ def test_model(args, test_points=None, write_errors=True):
                 error_metrics['directional'][train_test]['ild'].append(ild)
                 error_metrics['directional'][train_test]['icc'].append(icc)
 
-            if True and key in args.test_points:
+            if True:  # and key in args.test_points
                 # Filter and calculate error metrics
-                for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
+                for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_' todo: try mean absolute error for waveforms?
                     # Overall error metrics for each component
                     error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
                     error_metrics[train_test][component]['mse_'].append(np.square(np.subtract(predicted_rir[component, delay:win_end], gt_rir[component, delay:win_end])).mean())
@@ -343,10 +343,10 @@ def test_model(args, test_points=None, write_errors=True):
     spec_obj.close()
     phase_obj.close()
     if write_errors:
-        utl.print_errors(error_metrics)
         pathlib.Path(args.metric_loc).mkdir(parents=True, exist_ok=True)
         with open(f'{args.metric_loc}/{options.error_file}.pkl', 'wb') as f:
             pickle.dump(error_metrics, f)
+    utl.print_errors(error_metrics)
 
 
 if __name__ == '__main__':
