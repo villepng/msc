@@ -9,6 +9,7 @@ import torch
 import tqdm
 
 import naf.metrics as metrics
+import naf.utils as utl
 
 from pyroomacoustics.experimental.rt60 import measure_rt60
 from scipy.io import wavfile
@@ -89,76 +90,11 @@ def load_gt_data(args):
         readout = [float(xyz) for xyz in row[1:]]
         positions[row[0]] = [readout[0], readout[1]]
 
-    train_test_split = load_pkl(f'{args.split_loc}/{args.apt}_complete.pkl')
+    train_test_split = utl.load_pkl(f'{args.split_loc}/{args.apt}_complete.pkl')
     train_keys = train_test_split[0]
     test_keys = train_test_split[1]
 
     return spec_obj, phase_obj, positions, train_keys, test_keys, float(max_val[0])
-
-
-def load_pkl(path):
-    with open(path, 'rb') as loaded_pkl_obj:
-        loaded_pkl = pickle.load(loaded_pkl_obj)
-    return loaded_pkl
-
-
-def plot_stft_log(pred, gt, points, n_fft=128, fs=16000):  # tmp
-    fig, ax = plt.subplots()
-    img = librosa.display.specshow(pred[0, 0], y_axis='log', x_axis='time', ax=ax, sr=fs, hop_length=n_fft // 2, shading='nearest')
-    ax.set_title('Power spectrogram')
-    fig.colorbar(img, ax=ax, format="%+2.0f dB")
-
-
-def plot_stft(pred, gt, points, n_fft=128, fs=16000):
-    t = np.arange(pred.shape[-1]) / fs * n_fft / 2  # 50% overlap, parametrize?
-    f = np.arange(pred.shape[-2]) / (n_fft / fs)
-    fig, axarr = plt.subplots(1, 3)
-    fig.suptitle(f'Predicted log impulse response {points}', fontsize=16)  # comment out for final plots
-    plot = axarr[0].pcolormesh(t, f, pred[0, 0], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
-    axarr[0].set_title('Predicted')
-    plot2 = axarr[1].pcolormesh(t, f, gt[0, 0], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
-    axarr[1].set_title('Ground-truth')
-    plot3 = axarr[2].pcolormesh(t, f, gt[0, 0] - pred[0, 0], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
-    axarr[2].set_title('Error')
-    plt.setp(axarr, xlabel='Time (s)'), plt.setp(axarr, ylabel='Frequency (Hz)')
-    fig.colorbar(plot, format='%+2.f dB'), fig.colorbar(plot2, format='%+2.f dB'), fig.colorbar(plot3, format='%+2.f dB')
-    plt.show()
-
-
-def plot_stft_imshow(pred, gt, points):
-    fig, axarr = plt.subplots(1, 3)
-    fig.suptitle(f'Predicted log impulse response {points}', fontsize=16)
-    axarr[0].imshow(pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
-    axarr[0].set_title('Predicted')
-    # axarr[0].axis('off')
-    axarr[1].imshow(gt[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
-    axarr[1].set_title('Ground-truth')
-    # axarr[1].axis('off')
-    axarr[2].imshow(gt[0, 0] - pred[0, 0], cmap='inferno', vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
-    axarr[2].set_title('Error')
-    # axarr[2].axis('off')
-    plt.show()
-
-
-def plot_wave(pred, gt, points, name='impulse response', sr=16000):
-    fig, axarr = plt.subplots(3, 1)
-    fig.suptitle(f'Predicted vs. GT {name} between {points}', fontsize=16)  # comment out for final plots
-    max_len = max(np.arange(len(gt)) / sr)
-    axarr[0].plot(np.arange(len(pred)) / sr, pred)
-    axarr[0].set_xlim([0, max_len])
-    axarr[0].set_ylim([None, max(gt) * 1.1])
-    axarr[0].set_title('Predicted')
-    axarr[1].plot(np.arange(len(gt)) / sr, gt)
-    axarr[1].set_xlim([0, max_len])
-    axarr[1].set_ylim([None, max(gt) * 1.1])
-    axarr[1].set_title('Ground-truth')
-    axarr[2].plot(np.arange(len(np.subtract(pred[:len(gt)], gt))) / sr, np.subtract(pred[:len(gt)], gt))
-    axarr[2].set_ylim([None, max(gt) * 1.1])
-    axarr[2].set_xlim([0, max_len])
-    axarr[2].set_title('Error')
-    plt.ylabel('Amplitude')
-    plt.xlabel('Time (s)')
-    plt.show()
 
 
 def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_pos, max_bbox_pos, freq_bins):
@@ -200,60 +136,18 @@ def prepare_network(weight_path, args, output_device, min_pos, max_pos):
     return auditory_net
 
 
-def print_errors(error_metrics):  # train, channel, band, metric
-    global METRICS_CHANNEL
-    if 'directional' in error_metrics:  # directional, train, metric
-        print('Directional error metrics')
-        for train_test in ['train', 'test']:
-            print(f'  Directional errors for {train_test} points')
-            for metric, data in error_metrics['directional'][train_test].items():
-                if metric == 'dir_rir':
-                    print('    Directed RIR errors')
-                    for submetric, value in data.items():
-                        print(f'      avg. {submetric}: {np.average(value):.6f}')
-                else:
-                    print(f'    avg. {metric}: {np.average(data):.6f}')
-    for train_test in ['train', 'test']:
-        print(f'Errors for {train_test} points')
-        for channel in error_metrics[train_test]:
-            print(f'  channel {channel}')
-            # if len(error_metrics[train_test][channel]["mse_wav"]) > 0:  # add if necessary
-            for data in error_metrics[train_test][channel]:
-                if data in METRICS_CHANNEL and data != 'mse_wav':
-                    print(f'    avg. channel {data.upper()[:-1]}: {np.average(error_metrics[train_test][channel][data]):.6f}')
-                else:
-                    print(f'    band: {data}')
-                    for metric in error_metrics[train_test][channel][data]:
-                        if len(error_metrics[train_test][channel][data][metric]) > 0:
-                            print(f'      avg. {metric.upper()}: {np.average(error_metrics[train_test][channel][data][metric]):.6f}')
-
-
-def print_errors_old(error_metrics):
-    for train_test in ['train', 'test']:
-        print(f'{train_test} points'
-              f'\n  avg. MSE for RIRs:   {np.average(error_metrics[train_test]["mse"]):.6f}'
-              f'\n  avg. spectral error: {np.average(error_metrics[train_test]["spec_mse"]):.6f}'
-              f'\n  avg. RT60 error:     {np.average(error_metrics[train_test]["rt60"]):.6f}'
-              f'\n  avg. DRR error (dB): {np.average(error_metrics[train_test]["drr"]):.6f}'
-              f'\n  avg. C50 error (dB): {np.average(error_metrics[train_test]["c50"]):.6f}')
-        if len(error_metrics[train_test]["mse_wav"]) > 0:
-            print(f'\n  avg. MSE for the reverberant audio waveforms: {np.average(error_metrics[train_test]["mse_wav"])}:.6f')
-        if error_metrics[train_test]["errors"] != 0:
-            print(f'  errors: {error_metrics[train_test]["errors"]}')  # currently not used at all
-
-
 def test_model(args, test_points=None, write_errors=True):
     global RNG
     apt = args.apt
     max_len = args.max_len[apt]
     weight_path = f'{args.model_save_loc}/{apt}/0200.chkpt'
-    min_max = load_pkl(f'{args.minmax_base}/{args.apt}_minmax.pkl')
+    min_max = utl.load_pkl(f'{args.minmax_base}/{args.apt}_minmax.pkl')
     min_pos, max_pos = np.array(min_max[0][0:2]), np.array(min_max[1][0:2])
     output_device = 0
     orientation = 0
 
     # Load mean and std data & gt data and prepare the network
-    mean_std = load_pkl(f'{args.mean_std_base}/{apt}.pkl')
+    mean_std = utl.load_pkl(f'{args.mean_std_base}/{apt}.pkl')
     mean = torch.from_numpy(mean_std[0]).float()
     std = 3.0 * torch.from_numpy(mean_std[1]).float()
     # std_phase = 3.0 * torch.from_numpy(mean_std[2]).float()
@@ -305,13 +199,13 @@ def test_model(args, test_points=None, write_errors=True):
             # full_phase[:, :, :, 13:] = rp
 
             # Convert into time domain to calculate most metrics
-            # predicted_rir = to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
-            predicted_rir = to_wave(output[0], args.hop_len)  # [channels, length], random phase
-            # predicted_rir = to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
-            # predicted_rir = to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
-            gt_rir = to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
-            # plot_stft(phase, phase_data, key)
-            # gt_rir = to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
+            predicted_rir = utl.to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
+            # predicted_rir = utl.to_wave(output[0], args.hop_len)  # [channels, length], random phase
+            # predicted_rir = utl.to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
+            # predicted_rir = utl.to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
+            gt_rir = utl.to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
+            # utl.plot_stft(phase, phase_data, key)
+            # gt_rir = utl.to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
             # t = np.arange(len(gt_rir)) / 16000
             # plt.plot(t, 20*np.log10(abs(gt_rir)))
             # plt.show()
@@ -346,7 +240,7 @@ def test_model(args, test_points=None, write_errors=True):
                 error_metrics['directional'][train_test]['ild'].append(ild)
                 error_metrics['directional'][train_test]['icc'].append(icc)
 
-            if True:
+            if True and key in args.test_points:
                 # Filter and calculate error metrics
                 for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
                     # Overall error metrics for each component
@@ -418,9 +312,9 @@ def test_model(args, test_points=None, write_errors=True):
 
             # Plot some examples for checking the results
             if i < 1:
-                plot_stft(output, spec_data, key)
-                plot_wave(predicted_rir[0], gt_rir[0], key)
-                # plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
+                utl.plot_stft(output, spec_data, key)
+                utl.plot_wave(predicted_rir[0], gt_rir[0], key)
+                # utl.plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
                 # t = np.arange(len(edc_db_gt)) / fs
                 # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                 # plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
@@ -429,7 +323,14 @@ def test_model(args, test_points=None, write_errors=True):
                 # plt.legend()
                 # plt.show()
             if key in args.test_points:
-                plot_wave(predicted_rir[0], gt_rir[0], key)
+                utl.plot_stft_ambi(output, spec_data, key)
+                '''from naf.data_loading.data_maker import if_compute
+                np.random.seed(1234)
+                rp = np.random.uniform(-np.pi, np.pi, output[0].shape)
+                rnd_ph = output * (np.cos(rp) + (1.j * np.sin(rp)))
+                gen_if = if_compute(np.angle(rnd_ph)) / np.pi
+                plot_stft_ph(gen_if, phase_data, key)'''
+                utl.plot_wave_ambi(predicted_rir, gt_rir, key)
                 # plot_wave(wave_rir_out, ambisonic, key, 'audio waveform')
                 pathlib.Path(args.wav_loc).mkdir(parents=True, exist_ok=True)
                 if normalize:
@@ -440,46 +341,10 @@ def test_model(args, test_points=None, write_errors=True):
     spec_obj.close()
     phase_obj.close()
     if write_errors:
-        print_errors(error_metrics)
+        utl.print_errors(error_metrics)
         pathlib.Path(args.metric_loc).mkdir(parents=True, exist_ok=True)
         with open(f'{args.metric_loc}/{options.error_file}.pkl', 'wb') as f:
             pickle.dump(error_metrics, f)
-
-
-def to_wave(input_spec, hop_len, mean_val=None, std_val=None, gl=False, orig_phase=None):
-    if mean_val is not None:
-        renorm_input = input_spec * std_val
-        renorm_input = renorm_input + mean_val
-    else:
-        renorm_input = input_spec + 0.0
-    renorm_input = np.exp(renorm_input) - 1e-3
-    renorm_input = np.clip(renorm_input, 0.0, 100000.0)
-    if orig_phase is None:
-        if gl is False:
-            # Random phase reconstruction per image2reverb
-            np.random.seed(1234)
-            rp = np.random.uniform(-np.pi, np.pi, renorm_input.shape)
-            f = renorm_input * (np.cos(rp) + (1.j * np.sin(rp)))
-            out_wave = librosa.istft(f, hop_length=hop_len)
-        else:
-            out_wave = librosa.griffinlim(renorm_input, hop_length=hop_len, n_iter=40, momentum=0.5, random_state=64)
-    else:
-        f = renorm_input * (np.cos(orig_phase) + (1.j * np.sin(orig_phase)))
-        out_wave = librosa.istft(f, win_length=400, hop_length=200)
-    return out_wave
-
-
-def to_wave_if(input_stft, input_if, hop_len):
-    # 2 chanel input of shape [2,freq,time]
-    # First input is logged mag
-    # Second input is if divided by np.pi
-    padded_input_stft = np.concatenate((input_stft, input_stft[:, -1:]), axis=1)
-    padded_input_if = np.concatenate((input_if, input_if[:, -1:] * 0.0), axis=1)
-    unwrapped = np.cumsum(padded_input_if, axis=-1) * np.pi
-    phase_val = np.cos(unwrapped) + 1j * np.sin(unwrapped)
-    restored = (np.exp(padded_input_stft) - 1e-3) * phase_val
-    wave = librosa.istft(restored, hop_length=hop_len)
-    return wave
 
 
 if __name__ == '__main__':
@@ -491,7 +356,7 @@ if __name__ == '__main__':
         if pathlib.Path(f'{options.metric_loc}/{options.error_file}.pkl').is_file():
             print(f'Loaded total errors from \'{options.error_file}\':')
             with open(f'{options.metric_loc}/{options.error_file}.pkl', 'rb') as f:
-                print_errors(pickle.load(f))
+                utl.print_errors(pickle.load(f))
     else:
         test_model(options)
 
