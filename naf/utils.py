@@ -19,6 +19,24 @@ def load_pkl(path):
     return loaded_pkl
 
 
+def plot_errors(full_data, error):
+    centerfreqs = [125, 250, 500, 1000, 2000, 4000]
+    labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', 'broadband']
+    plt.xticks(np.arange(7), labels)
+    for method in ['off-grid mono', 'off-grid omni channel', 'on-grid mono', 'on-grid omni channel']:
+        train_test = ['train', 'test'] if 'off-grid' not in method else ['train']
+        for types in train_test:
+            errors = []
+            for i, freq in enumerate(centerfreqs):
+                errors.append(np.mean(full_data[method][types][0][freq][error]))
+            errors.append(np.mean(full_data[method][types][0][f'{error}_']))  # broadband
+            label = f'{method} {types}' if 'test' in train_test else f'{method}'
+            plt.plot(labels, errors, 'o-', label=label)
+    plt.ylabel(f'{error.upper()}')
+    plt.legend()
+    plt.show()
+
+
 def plot_stft_log(pred, gt, points, n_fft=128, fs=16000):  # tmp
     fig, ax = plt.subplots()
     img = librosa.display.specshow(pred[0, 0], y_axis='log', x_axis='time', ax=ax, sr=fs, hop_length=n_fft // 2, shading='nearest')
@@ -53,12 +71,13 @@ def plot_stft_ambi(pred, gt, points, n_fft=128, fs=16000):
     for channel, subfig in enumerate(subfigs.flat):
         subfig.suptitle(f'{channels[channel]} channel')
         axs = subfig.subplots(1, 2)
-        axs[0].pcolormesh(t, f, pred[0, channel], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
+        plot1 = axs[0].pcolormesh(t, f, pred[0, channel], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
         axs[0].set_title(f'Prediction ({points.replace("_", "─")})')
         plot2 = axs[1].pcolormesh(t, f, gt[0, channel], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
         axs[1].set_title(f'Ground-truth ({points.replace("_", "─")})')
-        plt.setp(axs[0], xlabel='Time (s)'), plt.setp(axs[1], ylabel='Frequency (Hz)')
-        # fig.colorbar(plot2, format='%+2.f dB')
+        plt.setp(axs[0], xlabel='Time (s)'), plt.setp(axs[0], ylabel='Frequency (Hz)')
+        plt.setp(axs[1], xlabel='Time (s)'), plt.setp(axs[1], ylabel='Frequency (Hz)')
+        fig.colorbar(plot1, format='%+2.f dB'), fig.colorbar(plot2, format='%+2.f dB')
     plt.show()
     plt.rcParams.update({'font.size': 22})
 
@@ -226,4 +245,13 @@ def to_wave_if(input_stft, input_if, hop_len):
 
 
 if __name__ == '__main__':
-    pass
+    off_grid = load_pkl(f'./out/ambisonics_0_4x2/metrics/errors2.pkl')
+    off_grid_sh = load_pkl(f'./out/ambisonics_1_4x2/metrics/errors2.pkl')
+    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors2.pkl')
+    sh = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors2.pkl')
+    full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
+
+    plot_errors(full, 'mse')
+    plot_errors(full, 'c50')
+    plot_errors(full, 'drr')
+    plot_errors(full, 'rt60')
