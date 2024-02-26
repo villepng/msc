@@ -20,7 +20,7 @@ from naf.model.networks import KernelResidualFCEmbeds
 from naf.options import Options
 
 
-METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']  # add spectral error for bands?
+METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']
 METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
 METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
 
@@ -67,6 +67,7 @@ def get_error_metric_dict(components, band_centerfreqs):
             error_metrics['directional'].update({train_test: {}})
             for metric in METRICS_DIRECTIONAL:
                 if metric == 'dir_rir':
+                    # todo: divide into frequency bands, skip drr
                     error_metrics['directional'][train_test].update({metric: {}})
                     for submetric in METRICS_BAND[:-1]:
                         error_metrics['directional'][train_test][metric].update({submetric: []})

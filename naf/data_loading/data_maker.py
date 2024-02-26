@@ -13,7 +13,7 @@ from scipy.io import wavfile
 from torchaudio.transforms import Spectrogram
 
 from naf.options import Options
-from naf.test_query import to_wave_if
+from naf.utils import to_wave_if
 
 
 class GetSpec:
@@ -89,15 +89,20 @@ def resample_data(wave_data, sr=16000, resample_rate=22050):
 
 def main():
     args = Options().parse()
-    base_path = f'../metadata/ambisonics_{args.order}_{args.grid}'
+    base_path = f'../metadata/ambisonics_{args.order}_{args.grid}_rm'
     mag_path = f'{base_path}/magnitudes'
     pathlib.Path(mag_path).mkdir(parents=True, exist_ok=True)
     phase_path = f'{base_path }/phases'
     pathlib.Path(phase_path).mkdir(parents=True, exist_ok=True)
+    # todo: startup parameters for these
+    # fs, early_ms = 16000, 50
+    # early_len = int(fs * early_ms / 1000)  # save 50ms from the start as wav, used for datasets where sound travel time is removed
+    # early_path = f'{base_path}/early'
+    # pathlib.Path(early_path).mkdir(parents=True, exist_ok=True)
     rooms = ['test_1']
     max_len_dict = {}
     spec_getter = GetSpec(components=args.components)
-    with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rirs.pickle', 'rb') as f:
+    with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}_rm/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
     for room_name in rooms:
@@ -107,29 +112,31 @@ def main():
         for orientation in ['0']:
             progress = tqdm.tqdm(rirs.items())
             progress.set_description('Calculating spectrograms')
-            for coordinate, rir in progress:
+            for points, rir in progress:
+                # early = rir[:early_len]
+                # wavfile.write(f'{early_path}/{points}.wav', fs, early)
                 # resampled = resample(np.clip(rir, -1.0, 1.0).T)
                 resampled = rir.T
                 real_spec, img_spec, raw_phase = spec_getter.transform(resampled)
                 length_tracker = np.max([length_tracker, real_spec.shape[2]])
 
-                # sr = 16000
-                # reconstructed_wave = to_wave_if(real_spec, img_spec)
-                # fig, axes = plt.subplots(2, 1)
-                # axes[0].plot(np.arange(len(reconstructed_wave)) / sr, reconstructed_wave)  # sr depends on resampling
-                # axes[0].set_title(f'Reconstructed waveform {coordinate}')
-                # axes[0].set_xlim([0, 0.2])
-                # axes[1].plot(np.arange(len(rir)) / sr, rir)
-                # axes[1].set_title(f'Original waveform {coordinate}')
-                # axes[1].set_xlim([0, 0.2])
-                # plt.show()
-                # plt.imshow(real_spec[0])
-                # plt.show()
-                # plt.imshow(img_spec[0])
-                # plt.show()
+                '''sr = 16000
+                reconstructed_wave = to_wave_if(real_spec, img_spec, args.hop_len)
+                fig, axes = plt.subplots(2, 1)
+                axes[0].plot(np.arange(len(reconstructed_wave)) / sr, reconstructed_wave)  # sr depends on resampling
+                axes[0].set_title(f'Reconstructed waveform {points}')
+                axes[0].set_xlim([0, 0.2])
+                axes[1].plot(np.arange(len(rir)) / sr, rir)
+                axes[1].set_title(f'Original waveform {points}')
+                axes[1].set_xlim([0, 0.2])
+                plt.show()
+                plt.imshow(real_spec[0])
+                plt.show()
+                plt.imshow(img_spec[0])
+                plt.show()'''
 
-                f_mag.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=real_spec.astype(np.half))
-                f_phase.create_dataset('{}_{}'.format(orientation, coordinate.replace('-', '_')), data=img_spec.astype(np.half))
+                f_mag.create_dataset('{}_{}'.format(orientation, points.replace('-', '_')), data=real_spec.astype(np.half))
+                f_phase.create_dataset('{}_{}'.format(orientation, points.replace('-', '_')), data=img_spec.astype(np.half))
         print(f'Max length {room_name}: {int(length_tracker)}')
         max_len_dict.update({room_name: int(length_tracker)})
         f_mag.close()
