@@ -44,7 +44,7 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
     wavfile.write(f'../../data/tmp/pred_{azimuth:.4f}.wav', fs, np.array(bin_pred).astype(np.float32).T)
     wavfile.write(f'../../data/tmp/omni_{azimuth:.4f}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
 
-    # Calculate "normal" metrics for directed RIRs
+    # Calculate "normal" metrics for directed RIRs, todo: skip drr, frequency bands
     error_metrics['directional'][train_test]['dir_rir']['mse'].append(np.square(dir_rir_pred - dir_rir_gt).mean())
     _, edc_db_pred = get_edc(dir_rir_pred)
     rt60_pred = get_rt_from_edc(edc_db_pred, fs)
@@ -103,7 +103,7 @@ def filter_rir(rir, f_center, fs):
     return rir_filt[500:-1, :]  # remove filtering delay
 
 
-def get_ambisonic_edc_err(pred_rir, gt_rir, cutoff=0.29, fs=16000):
+def get_ambisonic_edc_err(pred_rir, gt_rir, cutoff=0.29, fs=16000):  # todo: confirm correct calculation order
     """
     :param pred_rir: ambisonic rir as [chn, len]
     :param gt_rir: ambisonic rir as [chn, len]
@@ -112,12 +112,14 @@ def get_ambisonic_edc_err(pred_rir, gt_rir, cutoff=0.29, fs=16000):
     :return:
     """
     cutoff = int(cutoff * fs)  # 0.29s seems fine for the most part
-    edc_err = 0
+    total_edc_pred = 0
+    total_edc_gt = 0
     for channel in range(pred_rir.shape[0]):
-        _, edc_db_pred = get_edc(pred_rir[channel])
-        _, edc_db_gt = get_edc(gt_rir[channel])
-        edc_err += np.abs(edc_db_pred[:cutoff] - edc_db_gt[:cutoff])
-    return np.mean(edc_err)
+        edc_pred, _ = get_edc(pred_rir[channel])
+        edc_gt, _ = get_edc(gt_rir[channel])
+        total_edc_pred += np.sum(edc_pred[:cutoff])
+        total_edc_gt += np.sum(edc_gt[:cutoff])
+    return np.abs(10 * np.log10(total_edc_pred) - 10 * np.log10(total_edc_gt))
 
 
 def get_ambisonic_energy_err(pred_rir, gt_rir):
@@ -220,7 +222,7 @@ def get_edc(rir, normalize=True):
     """ Compute the inverse cumulative sum of the squared RIR (that's the EDC)
     :param rir: single-channel rir
     :param normalize:
-    :return:
+    :return: edc, edc_db
     """
     rir2_flipped = np.flip(rir ** 2)
     rir2_flipped_csum = np.zeros(np.size(rir))
