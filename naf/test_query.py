@@ -326,6 +326,10 @@ def test_model(args, test_points=None, write_errors=True):
                 # plt.legend()
                 # plt.show()
             if key in args.test_points:
+                '''with open(f'./out/tmp/{key}.pkl', 'wb') as f:
+                    pickle.dump(predicted_rir, f)
+                with open(f'./out/tmp/{key}_gt.pkl', 'wb') as f:
+                    pickle.dump(gt_rir, f)'''
                 utl.plot_stft_ambi(output, spec_data, key)
                 '''from naf.data_loading.data_maker import if_compute
                 np.random.seed(1234)
@@ -347,7 +351,7 @@ def test_model(args, test_points=None, write_errors=True):
         pathlib.Path(args.metric_loc).mkdir(parents=True, exist_ok=True)
         with open(f'{args.metric_loc}/{options.error_file}.pkl', 'wb') as f:
             pickle.dump(error_metrics, f)
-    utl.print_errors(error_metrics)
+        utl.print_errors(error_metrics)
 
 
 if __name__ == '__main__':
