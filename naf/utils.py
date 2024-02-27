@@ -52,30 +52,35 @@ def load_pkl(path):
     return loaded_pkl
 
 
-def plot_errors(full_data, error):
+# Currently assumes 4 error metrics
+def plot_errors(full_data, error_metrics):
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
     colours = ['grey', 'black', 'lightskyblue', 'royalblue', 'mediumseagreen', 'green']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', 'broadband']
+    fig, axarr = plt.subplots(2, 2)
     plt.xticks(np.arange(7), labels)
-    c = 0
-    for method in ['off-grid mono', 'off-grid omni channel', 'on-grid mono', 'on-grid omni channel']:
-        train_test = ['train', 'test'] if 'off-grid' not in method else ['train']
-        for types in train_test:
-            errors = []
-            for i, freq in enumerate(centerfreqs):
-                errors.append(np.mean(full_data[method][types][0][freq][error]))
-            errors.append(np.mean(full_data[method][types][0][f'{error}_']))  # broadband
-            errors = 100 * np.array(errors) if error == 'rt60' else errors
-            label = f'{method} {types}' if 'test' in train_test else f'{method}'
-            plt.plot(labels, errors, 'o-', label=label, color=colours[c])
-            c += 1
-    if error == 'rt60':
-        plt.ylabel(f'{error.upper()} (%)')
-    elif error in ['c50', 'drr']:
-        plt.ylabel(f'{error.upper()} (dB)')
-    else:
-        plt.ylabel(f'{error.upper()}')
-    plt.legend()
+    for i, subfig in enumerate(axarr.flat):
+        error = error_metrics[i]
+        c = 0
+        for method in ['off-grid mono', 'off-grid omni channel', 'on-grid mono', 'on-grid omni channel']:
+            train_test = ['train', 'test'] if 'off-grid' not in method else ['train']
+            for types in train_test:
+                errors = []
+                for freq in centerfreqs:
+                    errors.append(np.mean(full_data[method][types][0][freq][error]))  # 0 for channel, i.e. mono/omni
+                errors.append(np.mean(full_data[method][types][0][f'{error}_']))  # broadband
+                errors = 100 * np.array(errors) if error == 'rt60' else errors
+                label = f'{method} {types}' if 'test' in train_test else f'{method}'
+                subfig.plot(labels, errors, 'o-', label=label, color=colours[c])
+                c += 1
+        if error == 'rt60':
+            subfig.set_ylabel(f'{error.upper()} error (%)')
+        elif error in ['c50', 'drr']:
+            subfig.set_ylabel(f'{error.upper()} error (dB)')
+        else:
+            subfig.set_ylabel(f'{error.upper()}')
+        subfig.set_title(f'{error.upper()}')
+        subfig.legend(prop={'size': 16})
     plt.show()
 
 
@@ -301,10 +306,7 @@ if __name__ == '__main__':
     sh = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors.pkl')
     full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
 
-    plot_errors(full, 'mse')
-    plot_errors(full, 'c50')
-    plot_errors(full, 'drr')
-    plot_errors(full, 'rt60')
+    plot_errors(full, ['mse', 'rt60', 'drr', 'c50'])
 
     # plot omni waveforms
     '''gt_far_0, gt_far_sh = load_pkl('./out/tmp/0_199_gt.pkl'), load_pkl('./out/tmp/0_199_gt_sh.pkl')
