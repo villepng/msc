@@ -49,34 +49,6 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
     return torch.cat((position_embed, freq_embed, time_embed), dim=2), degree, non_norm_position
 
 
-def get_error_metric_dict(components, band_centerfreqs):
-    global METRICS_BAND, METRICS_CHANNEL, METRICS_DIRECTIONAL
-    error_metrics = {'train': {}, 'test': {}}
-    for train_test in ['train', 'test']:
-        for channel in range(components):
-            error_metrics[train_test].update({channel: {}})
-            for total in METRICS_CHANNEL:
-                error_metrics[train_test][channel].update({total: []})
-            for band in band_centerfreqs:
-                error_metrics[train_test][channel].update({band: {}})
-                for metric in METRICS_BAND:
-                    error_metrics[train_test][channel][band].update({metric: []})
-    if components > 1:
-        error_metrics.update({'directional': {}})
-        for train_test in ['train', 'test']:
-            error_metrics['directional'].update({train_test: {}})
-            for metric in METRICS_DIRECTIONAL:
-                if metric == 'dir_rir':
-                    # todo: divide into frequency bands, skip drr
-                    error_metrics['directional'][train_test].update({metric: {}})
-                    for submetric in METRICS_BAND[:-1]:
-                        error_metrics['directional'][train_test][metric].update({submetric: []})
-                else:
-                    error_metrics['directional'][train_test].update({metric: []})
-
-    return error_metrics
-
-
 def load_gt_data(args):
     spec_obj = h5py.File(f'{args.spec_base}/test_1.h5', 'r')
     phase_obj = h5py.File(f'{args.phase_base}/test_1.h5', 'r')
@@ -162,7 +134,7 @@ def test_model(args, test_points=None, write_errors=True):
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
     wave_mse_window = 50 * 16  # Calculate waveform MSE for 50ms after direct sound
-    error_metrics = get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
+    error_metrics = utl.get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
 
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)
@@ -245,7 +217,7 @@ def test_model(args, test_points=None, write_errors=True):
 
             if True:  # and key in args.test_points
                 # Filter and calculate error metrics
-                for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_' todo: try mean absolute error for waveforms?
+                for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
                     # Overall error metrics for each component
                     error_metrics[train_test][component]['spec_err_'].append(np.abs(np.subtract(output[:, component], spec_data[:, component])).mean())
                     error_metrics[train_test][component]['mse_'].append(np.square(np.subtract(predicted_rir[component, delay:win_end], gt_rir[component, delay:win_end])).mean())
@@ -258,10 +230,10 @@ def test_model(args, test_points=None, write_errors=True):
 
                     drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[component], delay))
                     drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[component], delay))
-                    error_metrics[train_test][component]['drr_'].append(np.abs(drr_gt - drr_pred) / drr_gt)
+                    error_metrics[train_test][component]['drr_'].append(np.abs(drr_gt - drr_pred))
                     c50_pred = 10 * np.log10(metrics.get_c50(predicted_rir[component], delay))
                     c50_gt = 10 * np.log10(metrics.get_c50(gt_rir[component], delay))
-                    error_metrics[train_test][component]['c50_'].append(np.abs(c50_gt - c50_pred) / c50_gt)
+                    error_metrics[train_test][component]['c50_'].append(np.abs(c50_gt - c50_pred))
 
                     '''t = np.arange(len(edc_db_gt)) / fs
                     plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
@@ -308,10 +280,10 @@ def test_model(args, test_points=None, write_errors=True):
 
                         drr_pred = 10 * np.log10(metrics.get_drr(filtered_pred[:, band], delay))
                         drr_gt = 10 * np.log10(metrics.get_drr(filtered_gt[:, band], delay))
-                        error_metrics[train_test][component][band_centerfreqs[band]]['drr'].append(np.abs(drr_gt - drr_pred) / drr_gt)
+                        error_metrics[train_test][component][band_centerfreqs[band]]['drr'].append(np.abs(drr_gt - drr_pred))
                         c50_pred = 10 * np.log10(metrics.get_c50(filtered_pred[:, band], delay))
                         c50_gt = 10 * np.log10(metrics.get_c50(filtered_gt[:, band], delay))
-                        error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(np.abs(c50_gt - c50_pred) / c50_gt)
+                        error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(np.abs(c50_gt - c50_pred))
 
             # Plot some examples for checking the results
             if i < 1:

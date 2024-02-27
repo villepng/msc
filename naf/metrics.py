@@ -44,20 +44,34 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
     wavfile.write(f'../../data/tmp/pred_{azimuth:.4f}.wav', fs, np.array(bin_pred).astype(np.float32).T)
     wavfile.write(f'../../data/tmp/omni_{azimuth:.4f}.wav', fs, np.array(bin_gt).astype(np.float32).T)'''
 
-    # Calculate "normal" metrics for directed RIRs, todo: skip drr, frequency bands
+    # Calculate "normal" metrics for directed RIRs
     error_metrics['directional'][train_test]['dir_rir']['mse'].append(np.square(dir_rir_pred - dir_rir_gt).mean())
     _, edc_db_pred = get_edc(dir_rir_pred)
     rt60_pred = get_rt_from_edc(edc_db_pred, fs)
     _, edc_db_gt = get_edc(dir_rir_gt)
     rt60_gt = get_rt_from_edc(edc_db_gt, fs)
     error_metrics['directional'][train_test]['dir_rir']['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
-
-    drr_pred = 10 * np.log10(get_drr(dir_rir_pred, delay))
-    drr_gt = 10 * np.log10(get_drr(dir_rir_gt, delay))
-    error_metrics['directional'][train_test]['dir_rir']['drr'].append(np.abs(drr_gt - drr_pred) / drr_gt)
     c50_pred = 10 * np.log10(get_c50(dir_rir_pred, delay))
     c50_gt = 10 * np.log10(get_c50(dir_rir_gt, delay))
-    error_metrics['directional'][train_test]['dir_rir']['c50'].append(np.abs(c50_gt - c50_pred) / c50_gt)
+    error_metrics['directional'][train_test]['dir_rir']['c50'].append(np.abs(c50_gt - c50_pred))
+
+    # Also for frequency bands
+    band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
+    bands = len(band_centerfreqs)
+    rir_bands = np.tile(dir_rir_pred, (bands, 1)).T
+    rir_bands_gt = np.tile(dir_rir_gt, (bands, 1)).T
+    filtered_pred = filter_rir(rir_bands, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
+    filtered_gt = filter_rir(rir_bands_gt, band_centerfreqs, fs)
+    for band in range(bands):
+        error_metrics['directional'][train_test]['dir_rir'][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
+        _, edc_db_pred = get_edc(filtered_pred[:, band])
+        rt60_pred = get_rt_from_edc(edc_db_pred, fs)
+        _, edc_db_gt = get_edc(filtered_gt[:, band])
+        rt60_gt = get_rt_from_edc(edc_db_gt, fs)
+        error_metrics['directional'][train_test]['dir_rir'][band_centerfreqs[band]]['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
+        c50_pred = 10 * np.log10(get_c50(filtered_pred[:, band], delay))
+        c50_gt = 10 * np.log10(get_c50(filtered_gt[:, band], delay))
+        error_metrics['directional'][train_test]['dir_rir'][band_centerfreqs[band]]['c50'].append(np.abs(c50_gt - c50_pred))
 
 
 def filter_rir(rir, f_center, fs):
