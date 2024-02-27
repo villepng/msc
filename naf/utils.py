@@ -13,6 +13,39 @@ METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
 METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
 
 
+def get_error_metric_dict(components, band_centerfreqs):
+    global METRICS_BAND, METRICS_CHANNEL, METRICS_DIRECTIONAL
+    error_metrics = {'train': {}, 'test': {}}
+    for train_test in ['train', 'test']:
+        for channel in range(components):
+            error_metrics[train_test].update({channel: {}})
+            for total in METRICS_CHANNEL:
+                error_metrics[train_test][channel].update({total: []})
+            for band in band_centerfreqs:
+                error_metrics[train_test][channel].update({band: {}})
+                for metric in METRICS_BAND:
+                    error_metrics[train_test][channel][band].update({metric: []})
+    if components > 1:
+        error_metrics.update({'directional': {}})
+        for train_test in ['train', 'test']:
+            error_metrics['directional'].update({train_test: {}})
+            for metric in METRICS_DIRECTIONAL:
+                if metric == 'dir_rir':
+                    error_metrics['directional'][train_test].update({metric: {}})
+                    for submetric in METRICS_BAND[:-1]:
+                        if submetric != 'drr':
+                            error_metrics['directional'][train_test][metric].update({submetric: []})
+                    for band in band_centerfreqs:
+                        error_metrics['directional'][train_test][metric].update({band: {}})
+                        for submetric in METRICS_BAND[:-1]:
+                            if submetric != 'drr':
+                                error_metrics['directional'][train_test][metric][band].update({submetric: []})
+                else:
+                    error_metrics['directional'][train_test].update({metric: []})
+
+    return error_metrics
+
+
 def load_pkl(path):
     with open(path, 'rb') as loaded_pkl_obj:
         loaded_pkl = pickle.load(loaded_pkl_obj)
@@ -185,7 +218,12 @@ def print_errors(error_metrics):  # train, channel, band, metric
                 if metric == 'dir_rir':
                     print('    Directed RIR errors')
                     for submetric, value in data.items():
-                        print(f'      avg. {submetric}: {np.average(value):.9f}')
+                        if submetric in METRICS_BAND:
+                            print(f'      avg. {submetric}: {np.average(value):.9f}')
+                        else:
+                            print(f'      band {submetric}:')
+                            for key, val in value.items():
+                                print(f'        {key}: {np.average(val):.9f}')
                 else:
                     print(f'    avg. {metric}: {np.average(data):.9f}')
     for train_test in ['train', 'test']:
@@ -257,10 +295,10 @@ if __name__ == '__main__':
     plt.rcParams.update({'font.size': 22})
 
     # plot error metrics for omni data
-    off_grid = load_pkl(f'./out/ambisonics_0_4x2/metrics/errors2.pkl')
-    off_grid_sh = load_pkl(f'./out/ambisonics_1_4x2/metrics/errors2.pkl')
-    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors2.pkl')
-    sh = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors2.pkl')
+    off_grid = load_pkl(f'./out/ambisonics_0_4x2/metrics/errors.pkl')
+    off_grid_sh = load_pkl(f'./out/ambisonics_1_4x2/metrics/errors.pkl')
+    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors.pkl')
+    sh = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors.pkl')
     full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
 
     plot_errors(full, 'mse')
