@@ -21,8 +21,9 @@ from naf.options import Options
 
 
 METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'edc', 'errors']
+METRICS_BINAURAL = ['ild', 'icc', 'ild_pred', 'ild_gt', 'icc_pred', 'icc_gt']
 METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'edc_', 'mse_wav']
-METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
+METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'binaural']
 
 RNG = np.random.default_rng(0)
 
@@ -212,15 +213,7 @@ def test_model(args, test_points=None, write_errors=True):
                 error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
                 error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
                 metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, RNG, delay, error_metrics, train_test, src_pos, rcv_pos)
-
-                # stupid currently
-                ild_pred, ild_gt, icc_pred, icc_gt = metrics.get_binaural_error_metrics(predicted_rir, gt_rir, RNG, src, rcv)
-                error_metrics['directional'][train_test]['ild'].append(np.abs(ild_pred - ild_gt))
-                error_metrics['directional'][train_test]['ild_pred'].append(ild_pred)
-                error_metrics['directional'][train_test]['ild_gt'].append(ild_gt)
-                error_metrics['directional'][train_test]['icc'].append(np.abs(icc_pred - icc_gt))
-                error_metrics['directional'][train_test]['icc_pred'].append(icc_pred)
-                error_metrics['directional'][train_test]['icc_gt'].append(icc_gt)
+                metrics.calculate_binaural_error_metrics(predicted_rir, gt_rir, RNG, error_metrics, train_test, src, rcv)
 
             if True:  # and key in args.test_points
                 # Filter and calculate error metrics
