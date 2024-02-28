@@ -8,9 +8,10 @@ import pickle
     Various helper functions, mostly for plotting network query results (in test_query.py)
 """
 
-METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']  # add spectral error for bands?
-METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
-METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
+METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'edc', 'errors']
+METRICS_BINAURAL = ['ild', 'icc', 'ild_pred', 'ild_gt', 'icc_pred', 'icc_gt']
+METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'edc_', 'mse_wav']
+METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'binaural']
 
 
 def get_error_metric_dict(components, band_centerfreqs):
@@ -40,6 +41,14 @@ def get_error_metric_dict(components, band_centerfreqs):
                         for submetric in METRICS_BAND[:-1]:
                             if submetric != 'drr':
                                 error_metrics['directional'][train_test][metric][band].update({submetric: []})
+                elif metric == 'binaural':
+                    error_metrics['directional'][train_test].update({metric: {}})
+                    for submetric in METRICS_BINAURAL:
+                        error_metrics['directional'][train_test][metric].update({submetric: []})
+                    for band in band_centerfreqs:
+                        error_metrics['directional'][train_test][metric].update({band: {}})
+                        for submetric in METRICS_BINAURAL:
+                            error_metrics['directional'][train_test][metric][band].update({submetric: []})
                 else:
                     error_metrics['directional'][train_test].update({metric: []})
 
@@ -251,6 +260,15 @@ def print_errors(error_metrics):  # train, channel, band, metric
                             print(f'      band {submetric}:')
                             for key, val in value.items():
                                 print(f'        {key}: {np.average(val):.9f}')
+                elif metric == 'binaural':
+                    print('    Binaural metrics')
+                    for submetric, value in data.items():
+                        if submetric in METRICS_BINAURAL:
+                            print(f'      avg. {submetric}: {np.average(value):.9f}')
+                        else:
+                            print(f'      band {submetric}:')
+                            for key, val in value.items():
+                                print(f'        {key}: {np.average(val):.9f}')
                 else:
                     print(f'    avg. {metric}: {np.average(data):.9f}')
     for train_test in ['train', 'test']:
@@ -266,20 +284,6 @@ def print_errors(error_metrics):  # train, channel, band, metric
                     for metric in error_metrics[train_test][channel][data]:
                         if len(error_metrics[train_test][channel][data][metric]) > 0:
                             print(f'      avg. {metric.upper()}: {np.average(error_metrics[train_test][channel][data][metric]):.9f}')
-
-
-def print_errors_old(error_metrics):
-    for train_test in ['train', 'test']:
-        print(f'{train_test} points'
-              f'\n  avg. MSE for RIRs:   {np.average(error_metrics[train_test]["mse"]):.6f}'
-              f'\n  avg. spectral error: {np.average(error_metrics[train_test]["spec_mse"]):.6f}'
-              f'\n  avg. RT60 error:     {np.average(error_metrics[train_test]["rt60"]):.6f}'
-              f'\n  avg. DRR error (dB): {np.average(error_metrics[train_test]["drr"]):.6f}'
-              f'\n  avg. C50 error (dB): {np.average(error_metrics[train_test]["c50"]):.6f}')
-        if len(error_metrics[train_test]["mse_wav"]) > 0:
-            print(f'\n  avg. MSE for the reverberant audio waveforms: {np.average(error_metrics[train_test]["mse_wav"])}:.6f')
-        if error_metrics[train_test]["errors"] != 0:
-            print(f'  errors: {error_metrics[train_test]["errors"]}')  # currently not used at all
 
 
 def to_wave(input_spec, hop_len, mean_val=None, std_val=None, gl=False, orig_phase=None):
@@ -330,14 +334,38 @@ if __name__ == '__main__':
     directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']}
 
     # normal
-    #for metric in ['mse', 'rt60', 'drr', 'c50']:
-    #    plot_errors(full, metric)
+    for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
+        plot_errors(full, metric)
 
     # directed
     for metric in ['mse', 'rt60', 'c50']:
         plot_errors_directional(directed, metric)
 
-    # plot omni waveforms
-    '''gt_far_0, gt_far_sh = load_pkl('./out/tmp/0_199_gt.pkl'), load_pkl('./out/tmp/0_199_gt_sh.pkl')
+    # plot omni waveforms or edcs etc.
+    gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
+    pred_close_0, pred_close_sh = load_pkl('./out/tmp/0_20.pkl'), load_pkl('./out/tmp/0_20_sh.pkl')
+    gt_far_0, gt_far_sh = load_pkl('./out/tmp/0_199_gt.pkl'), load_pkl('./out/tmp/0_199_gt_sh.pkl')
     pred_far_0, pred_far_sh = load_pkl('./out/tmp/0_199.pkl'), load_pkl('./out/tmp/0_199_sh.pkl')
-    plot_wave(pred_far_sh[0] * np.sqrt(4*np.pi), pred_far_0[0], '0-199')'''
+    # plot_wave(pred_far_sh[0] * np.sqrt(4*np.pi), pred_far_0[0], '0-199')
+    import naf.metrics as metrics
+    (_, gt_edc_close), (_, gt_edc_close_sh) = metrics.get_edc(gt_close_0[0]), metrics.get_edc(gt_close_sh[0])
+    (_, pred_edc_close), (_, pred_edc_close_sh) = metrics.get_edc(pred_close_0[0]), metrics.get_edc(pred_close_sh[0])
+    (_, gt_edc_far), (_, gt_edc_far_sh) = metrics.get_edc(gt_far_0[0]), metrics.get_edc(gt_far_sh[0])
+    (_, pred_edc_far), (_, pred_edc_far_sh) = metrics.get_edc(pred_far_0[0]), metrics.get_edc(pred_far_sh[0])
+
+    t = np.arange(len(gt_edc_close)) / 16000
+    axes = plt.axes()
+    axes.set_xlim([0, 0.33])
+    axes.set_ylim([-120, 1])
+    plt.plot(t, gt_edc_close, label=f'Close GT mono', color='black')
+    plt.plot(t, pred_edc_close, label=f'Close predicted mono', color='green')
+    plt.plot(t, pred_edc_close_sh, label=f'Close predicted omni', color='mediumseagreen')
+
+    plt.plot(t, gt_edc_far, label=f'Far GT mono', color='gray')
+    plt.plot(t, pred_edc_far, label=f'Far predicted mono', color='royalblue')
+    plt.plot(t, pred_edc_far_sh, label=f'Far predicted omni', color='lightskyblue')
+    plt.ylabel('Energy (dB)')
+    plt.xlabel('Time (s)')
+    plt.legend()
+    plt.show()
+

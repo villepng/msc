@@ -4,6 +4,76 @@ import scipy
 import spaudiopy as spa
 
 
+def calculate_binaural_error_metrics(pred_rir, gt_rir, rng, error_metrics, train_test, src, rcv, fs=16000, order=1):
+    """
+    :param pred_rir: ambisonic rir as [chn, len]
+    :param gt_rir: ambisonic rir as [chn, len]
+    :param rng: random number generator with 0 seed
+    :param error_metrics: where to save errors
+    :param train_test: save to train or test part
+    :param fs: sample rate of the rirs
+    :param order: ambisonics order used
+    :return: inter-channel level difference error and interchannel coherence error
+    """
+    hrir = spa.io.load_sofa_hrirs(f'../../data/hrir/mit_kemar_normal_pinna.sofa')  # parameter todo
+    hrir = spa.decoder.magls_bin(hrir, order)
+    brir_pred = spa.decoder.sh2bin(pred_rir, hrir)
+    brir_gt = spa.decoder.sh2bin(gt_rir, hrir)
+    white_noise = rng.standard_normal(1 * fs)
+    bin_pred, bin_gt = [], []
+    for i in range(2):
+        bin_pred.append(scipy.signal.fftconvolve(white_noise, brir_pred[i]))
+        bin_gt.append(scipy.signal.fftconvolve(white_noise, brir_gt[i]))
+
+    '''from scipy.io import wavfile
+    white_noise = white_noise / max(white_noise)
+    bin_pred, bin_gt = np.array(bin_pred), np.array(bin_gt)
+    bin_pred, bin_gt = bin_pred / np.max(bin_pred), bin_gt / np.max(bin_gt)
+    wavfile.write(f'../../data/tmp/mono.wav', fs, white_noise.astype(np.float32))
+    wavfile.write(f'../../data/tmp/bin_pred_{src}-{rcv}.wav', fs, np.array(bin_pred).astype(np.float32).T)
+    wavfile.write(f'../../data/tmp/bin_gt_{src}-{rcv}.wav', fs, np.array(bin_gt).astype(np.float32).T)
+    plt.plot(white_noise)
+    plt.show()'''
+
+    e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_gt[1])), np.sum(np.square(bin_gt[0]))
+    ild_pred, ild_gt = 10 * np.log10(e_pred_l / e_pred_r), 10 * np.log10(e_gt_l / e_gt_r)
+    icc_pred, icc_gt = np.sum(bin_pred[1] * bin_pred[0]) / np.sqrt(e_pred_l * e_pred_r),  np.sum(bin_gt[1] * bin_gt[0]) / np.sqrt(e_gt_l * e_gt_r)
+
+    # currently stupid
+    error_metrics['directional'][train_test]['binaural']['ild'].append(np.abs(ild_pred - ild_gt))
+    error_metrics['directional'][train_test]['binaural']['ild_pred'].append(ild_pred)
+    error_metrics['directional'][train_test]['binaural']['ild_gt'].append(ild_gt)
+    error_metrics['directional'][train_test]['binaural']['icc'].append(np.abs(icc_pred - icc_gt))
+    error_metrics['directional'][train_test]['binaural']['icc_pred'].append(icc_pred)
+    error_metrics['directional'][train_test]['binaural']['icc_gt'].append(icc_gt)
+
+    band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
+    bands = len(band_centerfreqs)
+    bin_gt_l = np.tile(bin_gt[1], (bands, 1)).T
+    bin_gt_r = np.tile(bin_gt[0], (bands, 1)).T
+    filtered_gt_l = filter_rir(bin_gt_l, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
+    filtered_gt_r = filter_rir(bin_gt_r, band_centerfreqs, fs)
+
+    bin_preds_l = np.tile(bin_pred[1], (bands, 1)).T
+    bin_pred_r = np.tile(bin_pred[0], (bands, 1)).T
+    filtered_pred_l = filter_rir(bin_preds_l, band_centerfreqs, fs)
+    filtered_pred_r = filter_rir(bin_pred_r, band_centerfreqs, fs)
+
+    for i, band in enumerate(band_centerfreqs):
+        e_pred_l, e_pred_r, e_gt_l, e_gt_r = (np.sum(np.square(filtered_pred_l[:, i])), np.sum(np.square(filtered_pred_r[:, i])),
+                                              np.sum(np.square(filtered_gt_l[:, i])), np.sum(np.square(filtered_gt_r[:, i])))
+        ild_pred, ild_gt = 10 * np.log10(e_pred_l / e_pred_r), 10 * np.log10(e_gt_l / e_gt_r)
+        icc_pred, icc_gt = (np.sum(filtered_pred_l[:, i] * filtered_pred_r[:, i]) / np.sqrt(e_pred_l * e_pred_r),
+                            np.sum(filtered_gt_l[:, i] * filtered_gt_r[:, i]) / np.sqrt(e_gt_l * e_gt_r))
+
+        error_metrics['directional'][train_test]['binaural'][band]['ild'].append(np.abs(ild_pred - ild_gt))
+        error_metrics['directional'][train_test]['binaural'][band]['ild_pred'].append(ild_pred)
+        error_metrics['directional'][train_test]['binaural'][band]['ild_gt'].append(ild_gt)
+        error_metrics['directional'][train_test]['binaural'][band]['icc'].append(np.abs(icc_pred - icc_gt))
+        error_metrics['directional'][train_test]['binaural'][band]['icc_pred'].append(icc_pred)
+        error_metrics['directional'][train_test]['binaural'][band]['icc_gt'].append(icc_gt)
+
+
 def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, train_test, src_pos, rcv_pos, fs=16000):
     """ Currently only works with 1st order ambisonics
     :param pred_rir: [chn, len]
@@ -147,42 +217,6 @@ def get_ambisonic_energy_err(pred_rir, gt_rir):
         e_pred += np.square(pred_rir[channel])
         e_gt += np.square(gt_rir[channel])
     return np.mean(np.square(e_pred - e_gt))
-
-
-def get_binaural_error_metrics(pred_rir, gt_rir, rng, src, rcv, fs=16000, order=1):
-    """
-    :param pred_rir: ambisonic rir as [chn, len]
-    :param gt_rir: ambisonic rir as [chn, len]
-    :param rng: random number generator with 0 seed
-    :param fs: sample rate of the rirs
-    :param order: ambisonics order used
-    :return: inter-channel level difference error and interchannel coherence error
-    """
-    hrir = spa.io.load_sofa_hrirs(f'../../data/hrir/mit_kemar_normal_pinna.sofa')  # parameter todo
-    hrir = spa.decoder.magls_bin(hrir, order)
-    brir_pred = spa.decoder.sh2bin(pred_rir, hrir)
-    brir_gt = spa.decoder.sh2bin(gt_rir, hrir)
-    white_noise = rng.standard_normal(1 * fs)
-    bin_pred, bin_gt = [], []
-    for i in range(2):
-        bin_pred.append(scipy.signal.fftconvolve(white_noise, brir_pred[i]))
-        bin_gt.append(scipy.signal.fftconvolve(white_noise, brir_gt[i]))
-
-    '''from scipy.io import wavfile
-    white_noise = white_noise / max(white_noise)
-    bin_pred, bin_gt = np.array(bin_pred), np.array(bin_gt)
-    bin_pred, bin_gt = bin_pred / np.max(bin_pred), bin_gt / np.max(bin_gt)
-    wavfile.write(f'../../data/tmp/mono.wav', fs, white_noise.astype(np.float32))
-    wavfile.write(f'../../data/tmp/bin_pred_{src}-{rcv}.wav', fs, np.array(bin_pred).astype(np.float32).T)
-    wavfile.write(f'../../data/tmp/bin_gt_{src}-{rcv}.wav', fs, np.array(bin_gt).astype(np.float32).T)
-    plt.plot(white_noise)
-    plt.show()'''
-
-    e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_gt[1])), np.sum(np.square(bin_gt[0]))
-    ild_pred, ild_gt = 10 * np.log10(e_pred_l / e_pred_r), 10 * np.log10(e_gt_l / e_gt_r)
-    icc_pred, icc_gt = np.sum(bin_pred[1] * bin_pred[0]) / np.sqrt(e_pred_l * e_pred_r),  np.sum(bin_gt[1] * bin_gt[0]) / np.sqrt(e_gt_l * e_gt_r)
-
-    return ild_pred, ild_gt, icc_pred, icc_gt
 
 
 def get_c50(rir, delay, fs=16000):
