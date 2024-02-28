@@ -20,8 +20,8 @@ from naf.model.networks import KernelResidualFCEmbeds
 from naf.options import Options
 
 
-METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'errors']
-METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'mse_wav']
+METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'edc', 'errors']
+METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'edc_', 'mse_wav']
 METRICS_DIRECTIONAL = ['amb_e', 'amb_edc', 'dir_rir', 'ild', 'icc']
 
 RNG = np.random.default_rng(0)
@@ -134,6 +134,7 @@ def test_model(args, test_points=None, write_errors=True):
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
     wave_mse_window = 50 * 16  # Calculate waveform MSE for 50ms after direct sound
+    cutoff = int(0.29 * 16000)  # cutoff for edc error
     error_metrics = utl.get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
 
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
@@ -211,9 +212,15 @@ def test_model(args, test_points=None, write_errors=True):
                 error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
                 error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
                 metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, RNG, delay, error_metrics, train_test, src_pos, rcv_pos)
-                ild, icc = metrics.get_binaural_error_metrics(predicted_rir, gt_rir, RNG, src, rcv)
-                error_metrics['directional'][train_test]['ild'].append(ild)
-                error_metrics['directional'][train_test]['icc'].append(icc)
+
+                # stupid currently
+                ild_pred, ild_gt, icc_pred, icc_gt = metrics.get_binaural_error_metrics(predicted_rir, gt_rir, RNG, src, rcv)
+                error_metrics['directional'][train_test]['ild'].append(np.abs(ild_pred - ild_gt))
+                error_metrics['directional'][train_test]['ild_pred'].append(ild_pred)
+                error_metrics['directional'][train_test]['ild_gt'].append(ild_gt)
+                error_metrics['directional'][train_test]['icc'].append(np.abs(icc_pred - icc_gt))
+                error_metrics['directional'][train_test]['icc_pred'].append(icc_pred)
+                error_metrics['directional'][train_test]['icc_gt'].append(icc_gt)
 
             if True:  # and key in args.test_points
                 # Filter and calculate error metrics
@@ -227,6 +234,7 @@ def test_model(args, test_points=None, write_errors=True):
                     _, edc_db_gt = metrics.get_edc(gt_rir[component])
                     rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
                     error_metrics[train_test][component]['rt60_'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
+                    error_metrics[train_test][component]['edc_'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
 
                     drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[component], delay))
                     drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[component], delay))
@@ -266,6 +274,7 @@ def test_model(args, test_points=None, write_errors=True):
                         _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
                         rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
                         error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
+                        error_metrics[train_test][component][band_centerfreqs[band]]['edc'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
                         '''t = np.arange(len(edc_db_gt)) / fs
                         plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                         plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
@@ -286,7 +295,7 @@ def test_model(args, test_points=None, write_errors=True):
                         error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(np.abs(c50_gt - c50_pred))
 
             # Plot some examples for checking the results
-            if i < 1:
+            if i < 1 and False:
                 utl.plot_stft(output, spec_data, key)
                 utl.plot_wave(predicted_rir[0], gt_rir[0], key)
                 # utl.plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
@@ -297,7 +306,7 @@ def test_model(args, test_points=None, write_errors=True):
                 # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
                 # plt.legend()
                 # plt.show()
-            if key in args.test_points:
+            if key in args.test_points and False:
                 '''with open(f'./out/tmp/{key}.pkl', 'wb') as f:
                     pickle.dump(predicted_rir, f)
                 with open(f'./out/tmp/{key}_gt.pkl', 'wb') as f:
