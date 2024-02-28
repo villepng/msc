@@ -27,14 +27,13 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
         dir_rir_pred += pred_rir[channel] * beamer[channel]
         dir_rir_gt += gt_rir[channel] * beamer[channel]
 
-    '''from test_query import plot_wave
-    t = np.arange(len(dir_rir_pred)) / fs
+    '''t = np.arange(len(dir_rir_pred)) / fs
     plt.plot(t, dir_rir_pred, label='directed')
-    plt.plot(t, pred_rir[0], label='omni')
+    # plt.plot(t, pred_rir[0], label='omni')
+    plt.plot(t, dir_rir_gt, label='directed gt')
     plt.title(f'src {src_pos} - rcv {rcv_pos}, angle {azimuth}')
     plt.legend()
     plt.show()
-    plot_wave(dir_rir_pred, dir_rir_gt, azimuth)
     from scipy.io import wavfile
     white_noise = rng.standard_normal(1 * fs)
     white_noise = white_noise / max(white_noise)
@@ -180,10 +179,10 @@ def get_binaural_error_metrics(pred_rir, gt_rir, rng, src, rcv, fs=16000, order=
     plt.show()'''
 
     e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_gt[1])), np.sum(np.square(bin_gt[0]))
-    ild_err = 10 * np.log10(e_pred_l / e_pred_r) - 10 * np.log10(e_gt_l / e_gt_r)
-    icc_err = np.sum(bin_pred[1] * bin_pred[0]) / np.sqrt(e_pred_l * e_pred_r) - np.sum(bin_gt[1] * bin_gt[0]) / np.sqrt(e_gt_l * e_gt_r)
+    ild_pred, ild_gt = 10 * np.log10(e_pred_l / e_pred_r), 10 * np.log10(e_gt_l / e_gt_r)
+    icc_pred, icc_gt = np.sum(bin_pred[1] * bin_pred[0]) / np.sqrt(e_pred_l * e_pred_r),  np.sum(bin_gt[1] * bin_gt[0]) / np.sqrt(e_gt_l * e_gt_r)
 
-    return np.abs(ild_err), np.abs(icc_err)
+    return ild_pred, ild_gt, icc_pred, icc_gt
 
 
 def get_c50(rir, delay, fs=16000):
