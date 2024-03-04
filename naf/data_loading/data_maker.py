@@ -95,10 +95,10 @@ def main():
     phase_path = f'{base_path }/phases'
     pathlib.Path(phase_path).mkdir(parents=True, exist_ok=True)
     # todo: startup parameters for these
-    # fs, early_ms = 16000, 50
-    # early_len = int(fs * early_ms / 1000)  # save 50ms from the start as wav, used for datasets where sound travel time is removed
-    # early_path = f'{base_path}/early'
-    # pathlib.Path(early_path).mkdir(parents=True, exist_ok=True)
+    fs, early_ms = 16000, 50
+    early_len = int(fs * early_ms / 1000)  # save 50ms from the start as wav, used for datasets where sound travel time is removed
+    early_path = f'{base_path}/early'
+    pathlib.Path(early_path).mkdir(parents=True, exist_ok=True)
     rooms = ['test_1']
     max_len_dict = {}
     spec_getter = GetSpec(components=args.components)
@@ -113,8 +113,8 @@ def main():
             progress = tqdm.tqdm(rirs.items())
             progress.set_description('Calculating spectrograms')
             for points, rir in progress:
-                # early = rir[:early_len]
-                # wavfile.write(f'{early_path}/{points}.wav', fs, early)
+                early = rir[:early_len]
+                wavfile.write(f'{early_path}/{points}.wav', fs, early)
                 # resampled = resample(np.clip(rir, -1.0, 1.0).T)
                 resampled = rir.T
                 real_spec, img_spec, raw_phase = spec_getter.transform(resampled)

@@ -39,9 +39,6 @@ class KernelResidualFCEmbeds(nn.Module):
         for k in range(num_block - 1):
             self.register_parameter('left_right_{}'.format(k), nn.Parameter(torch.randn(1, 1, self.components, intermediate_ch) / math.sqrt(intermediate_ch), requires_grad=True))
 
-        # for k in range(4):
-        #    self.register_parameter('rot_{}'.format(k), nn.Parameter(torch.randn(num_block - 1, 1, 1, intermediate_ch) / math.sqrt(intermediate_ch), requires_grad=True))
-
         self.proj = BasicProject2(input_ch + int(2 * grid_ch), intermediate_ch)
         self.residual_1 = nn.Sequential(BasicProject2(input_ch + 128, intermediate_ch), nn.LeakyReLU(negative_slope=0.1), BasicProject2(intermediate_ch, intermediate_ch))
         self.layers = torch.nn.ModuleList()
@@ -49,6 +46,7 @@ class KernelResidualFCEmbeds(nn.Module):
             self.layers.append(KernelLinearAct(intermediate_ch, intermediate_ch))
 
         self.out_layer = nn.Linear(intermediate_ch, output_ch)
+        self.out_wave = nn.Linear(intermediate_ch, output_ch)  # todo
         self.blocks = len(self.layers)
         self.probe = probe
 
@@ -67,7 +65,7 @@ class KernelResidualFCEmbeds(nn.Module):
         self.xy_offset = nn.Parameter(torch.zeros_like(self.grid_coors_xy), requires_grad=True)
         self.grid_0 = nn.Parameter(torch.randn(len(grid_coors_x), grid_ch, device='cpu').float() / np.sqrt(float(grid_ch)), requires_grad=True)
 
-    def forward(self, input_stuff, rot_idx, sound_loc=None):
+    def forward(self, input_stuff, sound_loc=None):
         samples = input_stuff.shape[1]
         sound_loc_v0 = sound_loc[..., :2]
         sound_loc_v1 = sound_loc[..., 2:]
@@ -81,7 +79,6 @@ class KernelResidualFCEmbeds(nn.Module):
         total_grid = torch.cat((grid_feat_v0, grid_feat_v1), dim=-1).unsqueeze(1).expand(-1, samples, -1)
 
         my_input = torch.cat((total_grid, input_stuff), dim=-1)
-        # rot_latent = torch.stack([getattr(self, 'rot_{}'.format(rot_idx_single)) for rot_idx_single in rot_idx], dim=0)
         out = self.proj(my_input).unsqueeze(2).repeat(1, 1, self.components, 1) + getattr(self, 'left_right_0')  # + rot_latent[:, 0]
         for k in range(len(self.layers)):
             out = self.layers[k](out) + getattr(self, f'left_right_{k + 1}')  # + rot_latent[:, k + 1]
@@ -89,7 +86,7 @@ class KernelResidualFCEmbeds(nn.Module):
                 out = out + self.residual_1(my_input).unsqueeze(2).repeat(1, 1, self.components, 1)
         if self.probe:
             return out
-        return self.out_layer(out)
+        return self.out_layer(out), self.out_wave(out)
 
 
 class PhaseLoss(nn.Module):

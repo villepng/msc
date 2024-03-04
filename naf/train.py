@@ -122,7 +122,7 @@ def train_net(rank, world_size, freeport, args):
         cur_iter = 0
         for data_stuff in sound_loader:
             gt = data_stuff[0].to(output_device, non_blocking=True)
-            phase = data_stuff[1].to(output_device, non_blocking=True)
+            early = data_stuff[1].to(output_device, non_blocking=True)
             degree = data_stuff[2].to(output_device, non_blocking=True)
             position = data_stuff[3].to(output_device, non_blocking=True)
             non_norm_position = data_stuff[4].to(output_device, non_blocking=True)
@@ -138,22 +138,18 @@ def train_net(rank, world_size, freeport, args):
 
             total_in = torch.cat((position_embed, freq_embed, time_embed), dim=2)
             optimizer.zero_grad(set_to_none=False)
-            try:
-                output = ddp_auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
-            except Exception as e:
-                print(gt.shape, degree.shape, position.shape, freqs.shape, times.shape, position_embed.shape,
-                      freq_embed.shape, time_embed.shape)
-                quit(e)
+            output, out_early = ddp_auditory_net(total_in, non_norm_position.squeeze(1))  # .squeeze(3).transpose(1, 2)
+            output, out_early = output.squeeze(3).transpose(1, 2), out_early.squeeze(3)[:, :800, :]  # 800 from early's size?
             # out_spec = output  # [:, :, :, 0]
             # out_phase = output[:, :, :, 1]
-            # a = 1.0  # todo: check scaling
+            a = 100
             loss = criterion(output, gt)
-            # loss_ph = criterion(out_phase, phase)
+            loss_early = criterion(out_early, early)
             if rank == 0:
-                total_losses += loss.detach()  # + loss_ph.detach()
-                progress.set_description(f' mag loss: {loss.detach():.6f}')  # , phase loss: {0:.6f}')
+                total_losses += loss.detach() + loss_early.detach()
+                progress.set_description(f' mag loss: {loss.detach():.6f}, early loss: {loss_early.detach():.6f}')
                 cur_iter += 1
-            # loss = loss + a * loss_ph
+            loss = loss + a * loss_early
             loss.backward()
             optimizer.step()
         decay_rate = args.lr_decay

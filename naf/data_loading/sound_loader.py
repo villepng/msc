@@ -55,13 +55,16 @@ class Soundsamples(torch.utils.data.Dataset):
         self.sound_files = train_test_split[0]
         self.sound_files_test = train_test_split[1]
 
-        self.early_data = train_test_split[0]
-        self.early_data_test = train_test_split[1]
+        self.early_data = {}
+        self.early_data_test = {}
         dirs = os.listdir(early_base)
         for file in dirs:
             _, wav = wavfile.read(f'{early_base}/{file}')
             file = file.replace('.wav', '').replace('-', '_')
-            self.early_data.update({file: wav})
+            if file in train_test_split[0][0]:  # suboptimal
+                self.early_data.update({file: wav})
+            else:
+                self.early_data_test.update({file: wav})
 
         with open(os.path.join(mean_std_base, room_name+'.pkl'), 'rb') as mean_std_ff:
             mean_std = pickle.load(mean_std_ff)
@@ -114,6 +117,7 @@ class Soundsamples(torch.utils.data.Dataset):
             spec_data = torch.from_numpy(self.sound_data[query_str][:]).float()
             phase_data = torch.from_numpy(self.phase_data[query_str][:]).float()
             spec_data, phase_data = spec_data[:, :, :self.max_len], phase_data[:, :, :self.max_len]
+            early_data = torch.from_numpy(self.early_data[pos_id]).float()
 
             if random.random() < 0.1:
                 # np.log(1e-3) = -6.90775527898213
@@ -144,7 +148,7 @@ class Soundsamples(torch.utils.data.Dataset):
             # selected_total_phase = phase_data[:, selected_freq, selected_time]
             loaded = True
 
-        return (selected_total, degree, degree, total_position, total_non_norm_position,
+        return (selected_total, early_data, degree, total_position, total_non_norm_position,
                 2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0,
                 2.0*torch.from_numpy(selected_time).float()/float(self.max_len-1)-1.0)
 
