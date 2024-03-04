@@ -128,13 +128,13 @@ def train_net(rank, world_size, freeport, args):
             non_norm_position = data_stuff[4].to(output_device, non_blocking=True)
             freqs = data_stuff[5].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
             times = data_stuff[6].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
-            times_ph = data_stuff[7].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
+            # times_ph = data_stuff[7].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
 
             with torch.no_grad():
                 position_embed = xyz_embedder(position).expand(-1, pixel_count, -1)
                 freq_embed = freq_embedder(freqs)
                 time_embed = time_embedder(times)
-                time_embed_ph = time_embedder(times_ph)
+                # time_embed_ph = time_embedder(times_ph)
 
             total_in = torch.cat((position_embed, freq_embed, time_embed), dim=2)
             optimizer.zero_grad(set_to_none=False)

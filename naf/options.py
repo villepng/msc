@@ -24,7 +24,7 @@ class Options:
         Create default save/dataset paths based on grid size and ambisonics order,
         currently kind of stupid
         """
-        save = f'ambisonics_{self.opt.order}_{self.opt.grid}'
+        save = f'ambisonics_{self.opt.order}_{self.opt.grid}_rm'
         
         if self.opt.model_save_loc is None:
             self.opt.model_save_loc = f'./test_results/{save}'
@@ -40,6 +40,8 @@ class Options:
             self.opt.minmax_base = f'./metadata/{save}/minmax'
         if self.opt.wav_base is None:
             self.opt.wav_base = f'../../data/generated/{save}'
+        if self.opt.early_base is None:
+            self.opt.early_base = f'./metadata/{save}/early'
         if self.opt.split_loc is None:
             self.opt.split_loc = f'./metadata/{save}/train_test_split/'
         if self.opt.wav_loc is None:
@@ -62,6 +64,7 @@ class Options:
         parser.add_argument('--mean_std_base', type=str)
         parser.add_argument('--minmax_base', type=str)
         parser.add_argument('--wav_base', type=str)
+        parser.add_argument('--early_base', type=str)
         parser.add_argument('--split_loc', type=str)
         parser.add_argument('--n_fft', default=128, type=int)
         parser.add_argument('--hop_len', default=64, type=int)

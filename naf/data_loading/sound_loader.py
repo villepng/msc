@@ -5,6 +5,8 @@ import pickle
 import random
 import torch
 
+from scipy.io import wavfile
+
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
@@ -25,6 +27,7 @@ class Soundsamples(torch.utils.data.Dataset):
         spec_base = arg_stuff.spec_base
         mean_std_base = arg_stuff.mean_std_base
         minmax_base = arg_stuff.minmax_base
+        early_base = arg_stuff.early_base
         room_name = arg_stuff.apt
         num_samples = arg_stuff.pixel_count
 
@@ -51,6 +54,14 @@ class Soundsamples(torch.utils.data.Dataset):
 
         self.sound_files = train_test_split[0]
         self.sound_files_test = train_test_split[1]
+
+        self.early_data = train_test_split[0]
+        self.early_data_test = train_test_split[1]
+        dirs = os.listdir(early_base)
+        for file in dirs:
+            _, wav = wavfile.read(f'{early_base}/{file}')
+            file = file.replace('.wav', '').replace('-', '_')
+            self.early_data.update({file: wav})
 
         with open(os.path.join(mean_std_base, room_name+'.pkl'), 'rb') as mean_std_ff:
             mean_std = pickle.load(mean_std_ff)
@@ -115,7 +126,7 @@ class Soundsamples(torch.utils.data.Dataset):
             # 2, freq, time
             sound_size = spec_data.shape
             selected_time = np.random.randint(0, sound_size[2], self.num_samples)
-            selected_time_ph = np.random.randint(0, 13, self.num_samples)  # only select phase from the beginning, corresponding to ~0-50ms (.5×13×128÷16000)
+            # selected_time_ph = np.random.randint(0, 13, self.num_samples)  # only select phase from the beginning, corresponding to ~0-50ms (.5×13×128÷16000)
             selected_freq = np.random.randint(0, sound_size[1], self.num_samples)
             degree = orientation_idx
 
@@ -130,11 +141,12 @@ class Soundsamples(torch.utils.data.Dataset):
             total_non_norm_position = torch.cat((torch.from_numpy(non_norm_start)[None], torch.from_numpy(non_norm_end)[None]), dim=1).float()
 
             selected_total = spec_data[:, selected_freq, selected_time]
-            selected_total_phase = phase_data[:, selected_freq, selected_time]
+            # selected_total_phase = phase_data[:, selected_freq, selected_time]
             loaded = True
 
-        return (selected_total, selected_total_phase, degree, total_position, total_non_norm_position,
-                2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0, 2.0*torch.from_numpy(selected_time).float()/float(self.max_len-1)-1.0, 2.0*torch.from_numpy(selected_time_ph).float()/float(12)-1.0)
+        return (selected_total, degree, degree, total_position, total_non_norm_position,
+                2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0,
+                2.0*torch.from_numpy(selected_time).float()/float(self.max_len-1)-1.0)
 
     def get_item_teaser(self, orientation_idx, reciever_pos, source_pos):
         selected_time = np.arange(0, self.max_len)
