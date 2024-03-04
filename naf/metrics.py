@@ -35,9 +35,9 @@ def calculate_binaural_error_metrics(pred_rir, gt_rir, rng, error_metrics, train
     plt.plot(white_noise)
     plt.show()'''
 
-    e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_gt[1])), np.sum(np.square(bin_gt[0]))
+    e_pred_l, e_pred_r, e_gt_l, e_gt_r = np.sum(np.square(bin_pred[0])), np.sum(np.square(bin_pred[1])), np.sum(np.square(bin_gt[0])), np.sum(np.square(bin_gt[1]))
     ild_pred, ild_gt = 10 * np.log10(e_pred_l / e_pred_r), 10 * np.log10(e_gt_l / e_gt_r)
-    icc_pred, icc_gt = np.sum(bin_pred[1] * bin_pred[0]) / np.sqrt(e_pred_l * e_pred_r),  np.sum(bin_gt[1] * bin_gt[0]) / np.sqrt(e_gt_l * e_gt_r)
+    icc_pred, icc_gt = np.sum(bin_pred[0] * bin_pred[1]) / np.sqrt(e_pred_l * e_pred_r),  np.sum(bin_gt[0] * bin_gt[1]) / np.sqrt(e_gt_l * e_gt_r)
 
     # currently stupid
     error_metrics['directional'][train_test]['binaural']['ild'].append(np.abs(ild_pred - ild_gt))
@@ -49,17 +49,30 @@ def calculate_binaural_error_metrics(pred_rir, gt_rir, rng, error_metrics, train
 
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
-    bin_gt_l = np.tile(bin_gt[1], (bands, 1)).T
-    bin_gt_r = np.tile(bin_gt[0], (bands, 1)).T
+    bin_gt_l = np.tile(bin_gt[0], (bands, 1)).T
+    bin_gt_r = np.tile(bin_gt[1], (bands, 1)).T
     filtered_gt_l = filter_rir(bin_gt_l, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
     filtered_gt_r = filter_rir(bin_gt_r, band_centerfreqs, fs)
 
-    bin_preds_l = np.tile(bin_pred[1], (bands, 1)).T
-    bin_pred_r = np.tile(bin_pred[0], (bands, 1)).T
+    bin_preds_l = np.tile(bin_pred[0], (bands, 1)).T
+    bin_pred_r = np.tile(bin_pred[1], (bands, 1)).T
     filtered_pred_l = filter_rir(bin_preds_l, band_centerfreqs, fs)
     filtered_pred_r = filter_rir(bin_pred_r, band_centerfreqs, fs)
 
     for i, band in enumerate(band_centerfreqs):
+        '''if src == 0 and rcv == 20:
+            fig, axarr = plt.subplots(2, 1)
+            fig.suptitle(f'{src}-{rcv}, {band} Hz')
+            axarr[0].set_xlim((0, 4000 // (i + 1)))
+            axarr[0].plot(filtered_pred_l[:, i], label='pred l', color='black')
+            axarr[0].plot(filtered_pred_r[:, i], label='pred r', color='red', alpha=0.5)
+            axarr[0].legend()
+            axarr[1].set_xlim((0, 4000 // (i + 1)))
+            axarr[1].plot(filtered_gt_l[:, i], label='gt l', color='black')
+            axarr[1].plot(filtered_gt_r[:, i], label='gt r', color='red', alpha=0.5)
+            axarr[1].legend()
+            plt.show()'''
+
         e_pred_l, e_pred_r, e_gt_l, e_gt_r = (np.sum(np.square(filtered_pred_l[:, i])), np.sum(np.square(filtered_pred_r[:, i])),
                                               np.sum(np.square(filtered_gt_l[:, i])), np.sum(np.square(filtered_gt_r[:, i])))
         ild_pred, ild_gt = 10 * np.log10(e_pred_l / e_pred_r), 10 * np.log10(e_gt_l / e_gt_r)
