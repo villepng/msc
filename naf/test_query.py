@@ -161,7 +161,8 @@ def test_model(args, test_points=None, write_errors=True):
             net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
             network.eval()
             with torch.no_grad():
-                output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
+                output, out_early = network(net_input, non_norm_position.squeeze(1))  # .squeeze(3).transpose(1, 2)
+                output = output.squeeze(3).transpose(1, 2)
             # phase = output[:, :, :, 1]
             # output = output[:, :, :, 0]
             # phase = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std_phase).numpy()
@@ -289,8 +290,9 @@ def test_model(args, test_points=None, write_errors=True):
 
             # Plot some examples for checking the results
             if i < 1 and False:
-                utl.plot_stft(output, spec_data, key)
-                utl.plot_wave(predicted_rir[0], gt_rir[0], key)
+                utl.plot_stft_ambi(output, spec_data, key)
+                utl.plot_wave_ambi(predicted_rir, gt_rir, key)
+                utl.plot_wave_ambi(out_early, gt_rir, key)
                 # utl.plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
                 # t = np.arange(len(edc_db_gt)) / fs
                 # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')

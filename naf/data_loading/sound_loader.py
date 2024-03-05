@@ -126,7 +126,7 @@ class Soundsamples(torch.utils.data.Dataset):
 
             actual_spec_len = spec_data.shape[2]
             spec_data = (spec_data - self.mean[:, :, :actual_spec_len])/self.std[:, :, :actual_spec_len]
-            phase_data = phase_data / self.std_if
+            # phase_data = phase_data / self.std_if
             # 2, freq, time
             sound_size = spec_data.shape
             selected_time = np.random.randint(0, sound_size[2], self.num_samples)

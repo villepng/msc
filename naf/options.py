@@ -104,7 +104,7 @@ class Options:
         self.opt = self.parser.parse_args()
         self.check_paths()
         self.opt.freq_bins = self.opt.n_fft // 2
-        self.opt.max_len = {'test_1': 86}  # Calculated when generating the dataset, 45 with fft_size 512
+        self.opt.max_len = {'test_1': 85}  # Calculated when generating the dataset, 45 with fft_size 512
         self.opt.subj_offset = int(self.opt.grid.split('x')[0]) * int(self.opt.grid.split('x')[1]) - 1  # Offset to convert between 'subjects' and points, see test_query.py before error metric calculation
         self.opt.components = int((int(self.opt.order) + 1) ** 2)
         torch.manual_seed(0)

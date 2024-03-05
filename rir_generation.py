@@ -123,6 +123,8 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # Generate/load SH RIRs
             if f'{i}-{j}' in RIRS:
                 sh_rirs = RIRS[f'{i}-{j}']
+                # sh_rirs = sh_rirs[delay_samples:-1, :]
+                # RIRS[f'{i}-{j}'] = sh_rirs
             else:
                 abs_echograms = srs.compute_echograms_sh(room, source, receiver, abs_wall, limits, order)
                 sh_rirs = srs.render_rirs_sh(abs_echograms, band_centerfreqs, fs).squeeze()

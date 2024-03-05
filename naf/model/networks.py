@@ -2,7 +2,7 @@ import math
 import numpy as np
 import torch
 
-from torch import nn
+from torch import nn, sin
 
 from naf.model.modules import fit_predict_torch
 
@@ -46,7 +46,7 @@ class KernelResidualFCEmbeds(nn.Module):
             self.layers.append(KernelLinearAct(intermediate_ch, intermediate_ch))
 
         self.out_layer = nn.Linear(intermediate_ch, output_ch)
-        self.out_wave = nn.Linear(intermediate_ch, output_ch)  # todo
+        self.out_wave = WaveoutBlock(intermediate_ch, output_ch)
         self.blocks = len(self.layers)
         self.probe = probe
 
@@ -102,3 +102,15 @@ class PhaseLoss(nn.Module):
         else:
             loss = torch.abs(data - target)
         return torch.mean(loss)
+
+
+class WaveoutBlock(nn.Module):
+    def __init__(self, channels, out_channels):
+        super().__init__()  # 20, 2000, 4, 512
+        self.first = nn.Linear(channels, out_channels)
+        # self.first.weight.data.uniform_(-np.sqrt(6.0 / channels), np.sqrt(6.0 / channels))
+        self.second = nn.Conv1d(2000, 800, kernel_size=1)
+
+    def forward(self, x):
+        x = self.first(x).squeeze()
+        return self.second(x)

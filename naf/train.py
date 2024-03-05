@@ -139,10 +139,10 @@ def train_net(rank, world_size, freeport, args):
             total_in = torch.cat((position_embed, freq_embed, time_embed), dim=2)
             optimizer.zero_grad(set_to_none=False)
             output, out_early = ddp_auditory_net(total_in, non_norm_position.squeeze(1))  # .squeeze(3).transpose(1, 2)
-            output, out_early = output.squeeze(3).transpose(1, 2), out_early.squeeze(3)[:, :800, :]  # 800 from early's size?
+            output = output.squeeze(3).transpose(1, 2)
             # out_spec = output  # [:, :, :, 0]
             # out_phase = output[:, :, :, 1]
-            a = 100
+            a = 200
             loss = criterion(output, gt)
             loss_early = criterion(out_early, early)
             if rank == 0:
@@ -165,7 +165,7 @@ def train_net(rank, world_size, freeport, args):
             par_idx += 1
         if rank == 0:
             avg_loss = total_losses.item() / cur_iter
-            if epoch % 10 == 0 or epoch == 1:
+            if epoch % 10 == 0 or epoch < 10:
                 print(f'\n  Ending epoch {epoch} for room \'{args.exp_name}\', avg. loss {avg_loss:.6f}')
         if rank == 0 and (epoch % 20 == 0 or epoch == 1 or epoch > (args.epochs - 3)):
             save_name = str(epoch).zfill(4) + '.chkpt'
