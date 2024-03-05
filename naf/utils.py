@@ -65,6 +65,7 @@ def plot_errors(full_data, error):
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
     colours = ['grey', 'black', 'lightskyblue', 'royalblue', 'mediumseagreen', 'green']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', 'broadband']
+    fig, ax = plt.subplots()
     plt.xticks(np.arange(7), labels)
     c = 0
     for method in ['off-grid mono', 'off-grid omni channel', 'on-grid mono', 'on-grid omni channel']:
@@ -76,7 +77,10 @@ def plot_errors(full_data, error):
             errors.append(np.mean(full_data[method][types][0][f'{error}_']))  # broadband
             errors = 100 * np.array(errors) if error == 'rt60' else errors
             label = f'{method} {types}' if 'test' in train_test else f'{method}'
-            plt.plot(labels, errors, 'o-', label=label, color=colours[c])
+            ax.plot(labels, errors, 'o-', label=label, color=colours[c])
+            x_left, x_right = ax.get_xlim()
+            y_low, y_high = ax.get_ylim()
+            ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
             c += 1
     if error == 'rt60':
         plt.ylabel(f'{error.upper()} error (%)')
@@ -92,6 +96,7 @@ def plot_errors_directional(full_data, error):
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
     colours = ['black', 'mediumseagreen', 'green']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', 'broadband']
+    fig, ax = plt.subplots()
     plt.xticks(np.arange(7), labels)
     c = 0
     for method, data in full_data.items():
@@ -104,6 +109,9 @@ def plot_errors_directional(full_data, error):
             errors = 100 * np.array(errors) if error == 'rt60' else errors
             label = f'{method} {types}' if 'test' in train_test else f'{method}'
             plt.plot(labels, errors, 'o-', label=label, color=colours[c])
+            x_left, x_right = ax.get_xlim()
+            y_low, y_high = ax.get_ylim()
+            ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
             c += 1
     if error == 'rt60':
         plt.ylabel(f'{error.upper()} error (%)')
@@ -116,10 +124,12 @@ def plot_errors_directional(full_data, error):
 
 
 def plot_stft_log(pred, gt, points, n_fft=128, fs=16000):  # tmp
-    fig, ax = plt.subplots()
-    img = librosa.display.specshow(pred[0, 0], y_axis='log', x_axis='time', ax=ax, sr=fs, hop_length=n_fft // 2, shading='nearest')
-    ax.set_title('Power spectrogram')
-    fig.colorbar(img, ax=ax, format="%+2.0f dB")
+    fig, ax = plt.subplots(1, 2)
+    img = librosa.display.specshow(pred[0, 0], y_axis='log', x_axis='time', ax=ax[0], sr=fs, hop_length=n_fft // 2, shading='nearest')
+    img2 = librosa.display.specshow(gt[0, 0], y_axis='log', x_axis='time', ax=ax[1], sr=fs, hop_length=n_fft // 2, shading='nearest')
+    ax[0].set_title('Power spectrogram')
+    fig.colorbar(img, ax=ax[0], format="%+2.0f dB")
+    fig.colorbar(img2, ax=ax[1], format="%+2.0f dB")
 
 
 def plot_stft(pred, gt, points, n_fft=128, fs=16000):
@@ -153,6 +163,7 @@ def plot_stft_ambi(pred, gt, points, n_fft=128, fs=16000):
         axs[0].set_title(f'Prediction ({points.replace("_", "─")})')
         plot2 = axs[1].pcolormesh(t, f, gt[0, channel], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
         axs[1].set_title(f'Ground-truth ({points.replace("_", "─")})')
+        # axs[0].set_yscale('log'), axs[1].set_yscale('log')
         plt.setp(axs[0], xlabel='Time (s)'), plt.setp(axs[0], ylabel='Frequency (Hz)')
         plt.setp(axs[1], xlabel='Time (s)'), plt.setp(axs[1], ylabel='Frequency (Hz)')
         fig.colorbar(plot1, format='%+2.f dB'), fig.colorbar(plot2, format='%+2.f dB')
