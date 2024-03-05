@@ -86,7 +86,7 @@ class KernelResidualFCEmbeds(nn.Module):
                 out = out + self.residual_1(my_input).unsqueeze(2).repeat(1, 1, self.components, 1)
         if self.probe:
             return out
-        return self.out_layer(out), self.out_wave(out)
+        return self.out_layer(out)
 
 
 class PhaseLoss(nn.Module):

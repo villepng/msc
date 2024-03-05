@@ -75,7 +75,7 @@ class Options:
         parser.add_argument('--resume', default=0, type=bool_flag, help='load weights or not from latest checkpoint')
         parser.add_argument('--batch_size', default=20, type=int)
         parser.add_argument('--reg_eps', default=1e-1, type=float, help='noise to regularize positions')
-        parser.add_argument('--pixel_count', default=2000, type=int, help='noise to regularize positions')
+        parser.add_argument('--pixel_count', default=800, type=int, help='noise to regularize positions')
         parser.add_argument('--lr_init', default=5e-4, type=float, help='starting learning rate')
         parser.add_argument('--lr_decay', default=1e-1, type=float, help='learning rate decay rate')
 

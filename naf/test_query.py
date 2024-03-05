@@ -161,11 +161,16 @@ def test_model(args, test_points=None, write_errors=True):
             net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
             network.eval()
             with torch.no_grad():
-                output, out_early = network(net_input, non_norm_position.squeeze(1))  # .squeeze(3).transpose(1, 2)
+                output, out_early = network(net_input[:, :2000, :], non_norm_position.squeeze(1))  # .squeeze(3).transpose(1, 2)
                 output = output.squeeze(3).transpose(1, 2)
             # phase = output[:, :, :, 1]
             # output = output[:, :, :, 0]
             # phase = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std_phase).numpy()
+            with open(f'../../data/generated/rirs/ambisonics_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rirs.pickle', 'rb') as f:
+                rirs = pickle.load(f)
+            gt_rir = rirs[key.replace('_', '-')].T
+            out_early = out_early.cpu().numpy()
+            utl.plot_wave_ambi(out_early.T, gt_rir[:, :800], key)
             output = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std + mean).numpy()
 
             ''''# Random phase reconstruction per image2reverb for later parts of the RIR

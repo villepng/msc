@@ -131,6 +131,7 @@ class Soundsamples(torch.utils.data.Dataset):
             sound_size = spec_data.shape
             selected_time = np.random.randint(0, sound_size[2], self.num_samples)
             # selected_time_ph = np.random.randint(0, 13, self.num_samples)  # only select phase from the beginning, corresponding to ~0-50ms (.5×13×128÷16000)
+            selected_time_early = np.random.randint(0, 800, self.num_samples)
             selected_freq = np.random.randint(0, sound_size[1], self.num_samples)
             degree = orientation_idx
 
@@ -150,7 +151,8 @@ class Soundsamples(torch.utils.data.Dataset):
 
         return (selected_total, early_data, degree, total_position, total_non_norm_position,
                 2.0*torch.from_numpy(selected_freq).float()/255.0 - 1.0,
-                2.0*torch.from_numpy(selected_time).float()/float(self.max_len-1)-1.0)
+                2.0*torch.from_numpy(selected_time).float()/float(self.max_len - 1) - 1.0,
+                2.0*torch.from_numpy(selected_time_early).float()/799 - 1.0)
 
     def get_item_teaser(self, orientation_idx, reciever_pos, source_pos):
         selected_time = np.arange(0, self.max_len)

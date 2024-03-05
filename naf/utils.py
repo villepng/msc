@@ -213,7 +213,7 @@ def plot_wave_ambi(pred, gt, points, sr=16000):
     for channel, subfig in enumerate(axarr.flat):
         subfig.set_title(f'{channels[channel]} channel')
         subfig.set_xlim([0, 0.08])
-        subfig.set_ylim([np.min((gt, pred)) * 1.1, np.max((gt, pred)) * 1.1])
+        subfig.set_ylim([np.min(gt) * 1.1, np.max(gt) * 1.1])
         subfig.plot(t, gt[channel], label=f'Ground-truth ({points.replace("_", "─")})', color='k', alpha=1.0)
         subfig.plot(t, pred[channel], label=f'Prediction ({points.replace("_", "─")})', color='mediumseagreen', alpha=0.8)
         subfig.set_ylabel('Amplitude')

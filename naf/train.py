@@ -49,7 +49,7 @@ def train_net(rank, world_size, freeport, args):
     time_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
     freq_embedder = EmbeddingModuleLog(num_freqs=args.num_freqs, ch_dim=2).to(output_device)
 
-    auditory_net = KernelResidualFCEmbeds(input_ch=126, intermediate_ch=args.features, grid_ch=args.grid_features, num_block=args.layers,
+    auditory_net = KernelResidualFCEmbeds(input_ch=105, intermediate_ch=args.features, grid_ch=args.grid_features, num_block=args.layers,
                                           grid_gap=args.grid_gap, grid_bandwidth=args.bandwith_init, bandwidth_min=args.min_bandwidth,
                                           bandwidth_max=args.max_bandwidth, float_amt=args.position_float, min_xy=dataset.min_pos,
                                           max_xy=dataset.max_pos, components=args.components).to(output_device)
@@ -94,7 +94,7 @@ def train_net(rank, world_size, freeport, args):
             exit()
 
     # We have conditional forward, must set find_unused_parameters to true
-    ddp_auditory_net = DDP(auditory_net, find_unused_parameters=False, device_ids=[rank])
+    ddp_auditory_net = DDP(auditory_net, find_unused_parameters=True, device_ids=[rank])
     criterion = torch.nn.MSELoss()
     criterion_phase = PhaseLoss()  # todo
     orig_container = []
@@ -128,28 +128,30 @@ def train_net(rank, world_size, freeport, args):
             non_norm_position = data_stuff[4].to(output_device, non_blocking=True)
             freqs = data_stuff[5].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
             times = data_stuff[6].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
+            times_early = data_stuff[7].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
             # times_ph = data_stuff[7].to(output_device, non_blocking=True).unsqueeze(2) * 2.0 * pi
 
             with torch.no_grad():
                 position_embed = xyz_embedder(position).expand(-1, pixel_count, -1)
                 freq_embed = freq_embedder(freqs)
                 time_embed = time_embedder(times)
+                time_embed_early = time_embedder(times_early)
                 # time_embed_ph = time_embedder(times_ph)
 
-            total_in = torch.cat((position_embed, freq_embed, time_embed), dim=2)
+            total_in = torch.cat((position_embed, time_embed_early), dim=2)
             optimizer.zero_grad(set_to_none=False)
-            output, out_early = ddp_auditory_net(total_in, non_norm_position.squeeze(1))  # .squeeze(3).transpose(1, 2)
-            output = output.squeeze(3).transpose(1, 2)
+            out_early = ddp_auditory_net(total_in, non_norm_position.squeeze(1)).squeeze()  # .squeeze(3).transpose(1, 2)
+            # output = output.squeeze(3).transpose(1, 2)
             # out_spec = output  # [:, :, :, 0]
             # out_phase = output[:, :, :, 1]
-            a = 200
-            loss = criterion(output, gt)
+            # a = 200
+            # loss = criterion(output, gt)
             loss_early = criterion(out_early, early)
             if rank == 0:
-                total_losses += loss.detach() + loss_early.detach()
-                progress.set_description(f' mag loss: {loss.detach():.6f}, early loss: {loss_early.detach():.6f}')
+                total_losses += loss_early.detach()
+                progress.set_description(f' early loss: {loss_early.detach():.6f}')  # mag loss: {loss.detach():.6f},
                 cur_iter += 1
-            loss = loss + a * loss_early
+            loss = loss_early
             loss.backward()
             optimizer.step()
         decay_rate = args.lr_decay
