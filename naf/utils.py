@@ -333,6 +333,48 @@ def to_wave_if(input_stft, input_if, hop_len):
     return wave
 
 
+def plot_tmp(gt_rir, pred_rir, fs=16000, n_fft=128):
+    t = np.arange(len(gt_rir[0])) / 16000
+    band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
+    bands = len(band_centerfreqs)
+    rir_bands, rir_bands_gt = np.tile(pred_rir[0], (bands, 1)).T, np.tile(gt_rir[0], (bands, 1)).T
+    filtered_pred, filtered_gt = metrics.filter_rir(rir_bands, band_centerfreqs, fs), metrics.filter_rir(rir_bands_gt, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
+    from naf.data_loading.data_maker import GetSpec
+    spec_getter = GetSpec(components=1)
+    (gt_spec, _, _), (pred_spec, _, _) = spec_getter.transform(gt_rir), spec_getter.transform(pred_rir)
+    t_fft = np.arange(gt_spec.shape[-1]) / fs * n_fft / 2  # 50% overlap, parametrize?
+    f = np.arange(gt_spec.shape[-2]) / (n_fft / fs)
+
+    fig, axarr = plt.subplots(2, 3)
+    for i, subfig in enumerate(axarr.flat):
+        if i == 1 or i == 4:
+            subfig.set_prop_cycle(plt.cycler('color', plt.cm.viridis(np.linspace(0, 1, 7))))
+            subfig.set_xlim([0, 0.33])
+
+    plot = axarr[0, 0].pcolormesh(t_fft, f, gt_spec[0])
+    _, edc = metrics.get_edc(gt_rir[0])
+    axarr[0, 1].plot(t, edc[:5440], label=f'broadband')
+    for i in range(6):
+        _, edc = metrics.get_edc(filtered_gt[:, i])
+        axarr[0, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
+    axarr[0, 2].plot(t, gt_rir[0], label='gt')
+
+    plot = axarr[1, 0].pcolormesh(t_fft, f, pred_spec[0])
+    axarr[1, 2].plot(t, pred_rir[0], label='predction')
+    _, edc = metrics.get_edc(pred_rir[0])
+    axarr[1, 1].plot(t, edc[:5440], label=f'broadband')
+    for i in range(6):
+        _, edc = metrics.get_edc(filtered_pred[:, i])
+        axarr[1, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
+
+
+    for subfig in axarr.flat:
+        subfig.set_ylabel('Amplitude')
+        subfig.set_xlabel('Time (s)')
+        subfig.legend()
+    plt.show()
+
+
 if __name__ == '__main__':
     plt.rcParams.update({'font.size': 24})
 
@@ -345,12 +387,12 @@ if __name__ == '__main__':
     directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']}
 
     # normal
-    for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
+    '''for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
         plot_errors(full, metric)
 
     # directed
     for metric in ['mse', 'rt60', 'c50']:
-        plot_errors_directional(directed, metric)
+        plot_errors_directional(directed, metric)'''
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
@@ -363,6 +405,8 @@ if __name__ == '__main__':
     (_, pred_edc_close), (_, pred_edc_close_sh) = metrics.get_edc(pred_close_0[0]), metrics.get_edc(pred_close_sh[0])
     (_, gt_edc_far), (_, gt_edc_far_sh) = metrics.get_edc(gt_far_0[0]), metrics.get_edc(gt_far_sh[0])
     (_, pred_edc_far), (_, pred_edc_far_sh) = metrics.get_edc(pred_far_0[0]), metrics.get_edc(pred_far_sh[0])
+
+    plot_tmp(gt_close_0, pred_close_0)
 
     t = np.arange(len(gt_edc_close)) / 16000
     axes = plt.axes()
