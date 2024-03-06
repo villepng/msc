@@ -333,23 +333,27 @@ def to_wave_if(input_stft, input_if, hop_len):
     return wave
 
 
-def plot_tmp(gt_rir, pred_rir, fs=16000, n_fft=128):
+def plot_tmp(gt_rir, pred_rir, gt_far, pred_far, fs=16000, n_fft=128):
     t = np.arange(len(gt_rir[0])) / 16000
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
     rir_bands, rir_bands_gt = np.tile(pred_rir[0], (bands, 1)).T, np.tile(gt_rir[0], (bands, 1)).T
+    # rir_bands_far, rir_bands_gt_far = np.tile(pred_far[0], (bands, 1)).T, np.tile(gt_far[0], (bands, 1)).T
     filtered_pred, filtered_gt = metrics.filter_rir(rir_bands, band_centerfreqs, fs), metrics.filter_rir(rir_bands_gt, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
+    # filtered_pred_far, filtered_gt_far = metrics.filter_rir(rir_bands_far, band_centerfreqs, fs), metrics.filter_rir(rir_bands_gt_far, band_centerfreqs, fs)
     from naf.data_loading.data_maker import GetSpec
     spec_getter = GetSpec(components=1)
     (gt_spec, _, _), (pred_spec, _, _) = spec_getter.transform(gt_rir), spec_getter.transform(pred_rir)
+    # (gt_spec_far, _, _), (pred_spec_far, _, _) = spec_getter.transform(gt_far), spec_getter.transform(pred_far)
     t_fft = np.arange(gt_spec.shape[-1]) / fs * n_fft / 2  # 50% overlap, parametrize?
     f = np.arange(gt_spec.shape[-2]) / (n_fft / fs)
 
     fig, axarr = plt.subplots(2, 3)
     for i, subfig in enumerate(axarr.flat):
-        if i == 1 or i == 4:
+        if i in [1, 4, 7, 10]:
             subfig.set_prop_cycle(plt.cycler('color', plt.cm.viridis(np.linspace(0, 1, 7))))
             subfig.set_xlim([0, 0.33])
+            subfig.set_ylim([-120, 1])
 
     plot = axarr[0, 0].pcolormesh(t_fft, f, gt_spec[0])
     _, edc = metrics.get_edc(gt_rir[0])
@@ -357,26 +361,47 @@ def plot_tmp(gt_rir, pred_rir, fs=16000, n_fft=128):
     for i in range(6):
         _, edc = metrics.get_edc(filtered_gt[:, i])
         axarr[0, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
-    axarr[0, 2].plot(t, gt_rir[0], label='gt')
+    axarr[0, 2].plot(t, gt_rir[0], c='mediumseagreen')
 
     plot = axarr[1, 0].pcolormesh(t_fft, f, pred_spec[0])
-    axarr[1, 2].plot(t, pred_rir[0], label='predction')
     _, edc = metrics.get_edc(pred_rir[0])
     axarr[1, 1].plot(t, edc[:5440], label=f'broadband')
     for i in range(6):
         _, edc = metrics.get_edc(filtered_pred[:, i])
         axarr[1, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
+    axarr[1, 2].plot(t, pred_rir[0], c='mediumseagreen')
 
+    '''plot = axarr[2, 0].pcolormesh(t_fft, f, gt_spec_far[0])
+    _, edc = metrics.get_edc(gt_far[0])
+    axarr[2, 1].plot(t, edc[:5440], label=f'broadband')
+    for i in range(6):
+        _, edc = metrics.get_edc(filtered_gt_far[:, i])
+        axarr[2, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
+    axarr[2, 2].plot(t, gt_far[0], label='gt far')
 
-    for subfig in axarr.flat:
-        subfig.set_ylabel('Amplitude')
+    plot = axarr[3, 0].pcolormesh(t_fft, f, pred_spec_far[0])
+    _, edc = metrics.get_edc(pred_far[0])
+    axarr[3, 1].plot(t, edc[:5440], label=f'broadband')
+    for i in range(6):
+        _, edc = metrics.get_edc(filtered_pred_far[:, i])
+        axarr[3, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
+    axarr[3, 2].plot(t, pred_far[0], label='predction far')'''
+
+    for i, subfig in enumerate(axarr.flat):
+        if i in [0, 3, 6, 9]:
+            subfig.set_ylabel('Frequency (Hz)')
+        elif i in [1, 4, 7, 10]:
+            subfig.set_ylabel('Energy (dB)')
+        else:
+            subfig.set_ylabel('Frequency')
         subfig.set_xlabel('Time (s)')
-        subfig.legend()
+        if i in [1, 4, 7, 10]:
+            subfig.legend()
     plt.show()
 
 
 if __name__ == '__main__':
-    plt.rcParams.update({'font.size': 24})
+    plt.rcParams.update({'font.size': 22})
 
     # plot error metrics for omni data
     off_grid = load_pkl(f'./out/ambisonics_0_4x2/metrics/errors.pkl')
@@ -406,7 +431,8 @@ if __name__ == '__main__':
     (_, gt_edc_far), (_, gt_edc_far_sh) = metrics.get_edc(gt_far_0[0]), metrics.get_edc(gt_far_sh[0])
     (_, pred_edc_far), (_, pred_edc_far_sh) = metrics.get_edc(pred_far_0[0]), metrics.get_edc(pred_far_sh[0])
 
-    plot_tmp(gt_close_0, pred_close_0)
+    plot_tmp(gt_close_0, pred_close_0, gt_far_0, pred_far_0)
+    plot_tmp(gt_far_0, pred_far_0, gt_close_0, pred_close_0)
 
     t = np.arange(len(gt_edc_close)) / 16000
     axes = plt.axes()
