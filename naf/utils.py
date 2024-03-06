@@ -333,11 +333,11 @@ def to_wave_if(input_stft, input_if, hop_len):
     return wave
 
 
-def plot_tmp(gt_rir, pred_rir, gt_far, pred_far, fs=16000, n_fft=128):
+def plot_tmp(gt_rir, pred_rir, gt_far, pred_far, fs=16000, n_fft=128, channel=0):
     t = np.arange(len(gt_rir[0])) / 16000
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
-    rir_bands, rir_bands_gt = np.tile(pred_rir[0], (bands, 1)).T, np.tile(gt_rir[0], (bands, 1)).T
+    rir_bands, rir_bands_gt = np.tile(pred_rir[channel], (bands, 1)).T, np.tile(gt_rir[channel], (bands, 1)).T
     # rir_bands_far, rir_bands_gt_far = np.tile(pred_far[0], (bands, 1)).T, np.tile(gt_far[0], (bands, 1)).T
     filtered_pred, filtered_gt = metrics.filter_rir(rir_bands, band_centerfreqs, fs), metrics.filter_rir(rir_bands_gt, band_centerfreqs, fs)  # len, bands, pred and gt chan, len
     # filtered_pred_far, filtered_gt_far = metrics.filter_rir(rir_bands_far, band_centerfreqs, fs), metrics.filter_rir(rir_bands_gt_far, band_centerfreqs, fs)
@@ -355,21 +355,21 @@ def plot_tmp(gt_rir, pred_rir, gt_far, pred_far, fs=16000, n_fft=128):
             subfig.set_xlim([0, 0.33])
             subfig.set_ylim([-120, 1])
 
-    plot = axarr[0, 0].pcolormesh(t_fft, f, gt_spec[0])
-    _, edc = metrics.get_edc(gt_rir[0])
+    plot = axarr[0, 0].pcolormesh(t_fft, f, gt_spec[channel])
+    _, edc = metrics.get_edc(gt_rir[channel])
     axarr[0, 1].plot(t, edc[:5440], label=f'broadband')
     for i in range(6):
         _, edc = metrics.get_edc(filtered_gt[:, i])
         axarr[0, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
-    axarr[0, 2].plot(t, gt_rir[0], c='mediumseagreen')
+    axarr[0, 2].plot(t, gt_rir[channel], c='mediumseagreen')
 
-    plot = axarr[1, 0].pcolormesh(t_fft, f, pred_spec[0])
-    _, edc = metrics.get_edc(pred_rir[0])
+    plot = axarr[1, 0].pcolormesh(t_fft, f, pred_spec[channel])
+    _, edc = metrics.get_edc(pred_rir[channel])
     axarr[1, 1].plot(t, edc[:5440], label=f'broadband')
     for i in range(6):
         _, edc = metrics.get_edc(filtered_pred[:, i])
         axarr[1, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
-    axarr[1, 2].plot(t, pred_rir[0], c='mediumseagreen')
+    axarr[1, 2].plot(t, pred_rir[channel], c='mediumseagreen')
 
     '''plot = axarr[2, 0].pcolormesh(t_fft, f, gt_spec_far[0])
     _, edc = metrics.get_edc(gt_far[0])
