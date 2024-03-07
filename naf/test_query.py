@@ -303,7 +303,9 @@ def test_model(args, test_points=None, write_errors=True):
                 '''with open(f'./out/tmp/{key}.pkl', 'wb') as f:
                     pickle.dump(predicted_rir, f)
                 with open(f'./out/tmp/{key}_gt.pkl', 'wb') as f:
-                    pickle.dump(gt_rir, f)'''
+                    pickle.dump(gt_rir, f)
+                with open(f'./out/tmp/{key}_stft.pkl', 'wb') as f:
+                    pickle.dump(output, f)'''
                 utl.plot_stft_ambi(output, spec_data, key)
                 '''from naf.data_loading.data_maker import if_compute
                 np.random.seed(1234)
