@@ -357,22 +357,26 @@ def plot_tmp(gt_rir, pred_rir, pred_stft, gt_far=None, pred_far=None, fs=16000, 
             subfig.set_ylim([-120, 1])
 
     plot = axarr[0, 0].pcolormesh(t_fft, f, gt_spec[channel])
+    axarr[0, 0].set_title(f'GT spectrogram')
     _, edc = metrics.get_edc(gt_rir[channel])
     axarr[0, 1].plot(t, edc[:5440], label=f'broadband')
-    axarr[0, 1].set_title(f'Ground-truth')
+    axarr[0, 1].set_title(f'GT EDC')
     for i in range(6):
         _, edc = metrics.get_edc(filtered_gt[:, i])
         axarr[0, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
     axarr[0, 2].plot(t, gt_rir[channel], c='mediumseagreen')
+    axarr[0, 2].set_title(f'GT RIR waveform')
 
     plot2 = axarr[1, 0].pcolormesh(t_fft2, f, pred_stft[0, channel])
+    axarr[1, 0].set_title(f'Predicted spectrogram')
     _, edc = metrics.get_edc(pred_rir[channel])
     axarr[1, 1].plot(t, edc[:5440], label=f'broadband')
-    axarr[1, 1].set_title(f'Prediction')
+    axarr[1, 1].set_title(f'Predicted EDC')
     for i in range(6):
         _, edc = metrics.get_edc(filtered_pred[:, i])
         axarr[1, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
     axarr[1, 2].plot(t, pred_rir[channel], c='mediumseagreen')
+    axarr[1, 2].set_title(f'Predicted RIR waveform')
 
     fig.colorbar(plot, format='%+2.f dB'), fig.colorbar(plot2, format='%+2.f dB')
 
