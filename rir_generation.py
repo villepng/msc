@@ -307,6 +307,7 @@ def write_split_metadata(grid: np.array, room_name: str, save_path: str) -> None
     :param save_path: path to save the pickle file
     :return:
     """
+    rng = np.random.default_rng(0)
     save_path = f'{save_path}/train_test_split'
     check_and_create_dir(save_path)
     points = grid.shape[0]
@@ -316,7 +317,7 @@ def write_split_metadata(grid: np.array, room_name: str, save_path: str) -> None
             if i == j:
                 continue
             data.append(f'{i}_{j}')
-    np.random.shuffle(data)
+    rng.shuffle(data)
     pairs = points * (points - 1)
     train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
     split = [{0: data[:train]}, {0: data[train:train+test]}]
