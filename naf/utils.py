@@ -442,8 +442,8 @@ if __name__ == '__main__':
     (_, gt_edc_far), (_, gt_edc_far_sh) = metrics.get_edc(gt_far_0[0]), metrics.get_edc(gt_far_sh[0])
     (_, pred_edc_far), (_, pred_edc_far_sh) = metrics.get_edc(pred_far_0[0]), metrics.get_edc(pred_far_sh[0])
 
-    plot_tmp(gt_close_sh, pred_close_sh, stft_close_sh)
-    plot_tmp(gt_far_sh, pred_far_sh, stft_far_sh)
+    # plot_tmp(gt_close_sh, pred_close_sh, stft_close_sh)
+    # plot_tmp(gt_far_sh, pred_far_sh, stft_far_sh)
 
     # plot_tmp(gt_close_0, pred_close_0, stft_close_0)
     # plot_tmp(gt_far_0, pred_far_0, stft_far_0)
@@ -461,6 +461,32 @@ if __name__ == '__main__':
     plt.plot(t, pred_edc_far_sh, label=f'Far predicted omni', color='lightskyblue')
     plt.ylabel('Energy (dB)')
     plt.xlabel('Time (s)')
+    plt.legend()
+    plt.show()
+
+    from rir_generation import create_grid
+    main_grid = create_grid([20, 10], 1.0, [10.0, 6.0, 2.5])
+    small_grid = create_grid([10, 5], 1.25, [10.0, 6.0, 2.5])
+
+    rng = np.random.default_rng(0)
+    rng.shuffle(main_grid)
+    pairs = main_grid.shape[0]
+    train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
+    train_p, test_p = main_grid[:train], main_grid[train:train+test]
+
+    axes = plt.axes()
+    x_left, x_right = axes.get_xlim()
+    y_low, y_high = axes.get_ylim()
+    axes.set_aspect(abs((x_right - x_left) / (y_low - y_high)))
+    axes.set_xticks(np.arange(0, 7, step=1.0))
+    axes.set_yticks(np.arange(0, 11, step=1.0))
+    axes.scatter(train_p[:, 1], train_p[:, 0], c='k', label='Main grid train points')
+    axes.scatter(test_p[:, 1], test_p[:, 0], c='b', label='Main grid test points')
+    axes.scatter(small_grid[:, 1], small_grid[:, 0], marker='x', c='r', label='Off-grid test points')
+    r = plt.Rectangle((0.0, 0.0), 6.0, 10.0, fill=False, edgecolor='k', linewidth=2.0)
+    axes.add_patch(r)
+    # axes.set_xlim([0.0, 6.0])
+    # axes.set_ylim([0.0, 10.0])
     plt.legend()
     plt.show()
 
