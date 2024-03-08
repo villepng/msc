@@ -17,12 +17,13 @@ RIRS = {}
 SOUND_V = 343
 # Values from https://www.acoustic-supplies.com/absorption-coefficient-chart/
 MATERIALS = {
-    'carpet': [0.08, 0.08, 0.3, 0.6, 0.75, 0.8],  # Frequency bands; 125, 250, 500, 1k, 2k, 4k
+    'brick': [0.4, 0.65, 0.85, 0.75, 0.65, 0.6],  # Frequency bands; 125, 250, 500, 1k, 2k, 4k
+    'carpet': [0.01, 0.02, 0.06, 0.15, 0.25, 0.45],
     'concrete': [0.36, 0.44, 0.31, 0.29, 0.39, 0.25],
-    'drapery': [0.14, 0.35, 0.53, 0.75, 0.7, 0.6],
+    'drapery': [0.05, 0.12, 0.35, 0.48, 0.38, 0.36],
     'fiberglass': [0.06, 0.2, 0.65, 0.9, 0.95, 0.98],
-    'glass': [0.04, 0.04, 0.03, 0.03, 0.02, 0.02],
-    'plaster': [0.2, 0.15, 0.1, 0.08, 0.04, 0.02],
+    'glass': [0.1, 0.07, 0.05, 0.04, 0.04, 0.04],
+    'plaster': [0.15, 0.11, 0.04, 0.04, 0.07, 0.08],
     }
 
 
@@ -91,15 +92,14 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     # band_centerfreqs[0] = 1000
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # basic absorption
-    abs_wall = np.array([MATERIALS['fiberglass'], MATERIALS['fiberglass'], MATERIALS['fiberglass'],
-                         MATERIALS['fiberglass'], MATERIALS['carpet'], MATERIALS['carpet']])
+    abs_wall = np.array([MATERIALS['drapery'], MATERIALS['glass'], MATERIALS['brick'],
+                         MATERIALS['brick'], MATERIALS['carpet'], MATERIALS['plaster']]).T
     # rt60 = np.array([rt60])
     rt60, _, _ = srs.room_stats(room, abs_wall, False)
-    maxlim = 0.8  # 0.8, 1s
+    # maxlim = 0.8  # 0.8, 1s
     # limits = np.empty(nBands)
     # limits.fill(np.minimum(rt60[0], maxlim))
-    limits = rt60 * 2  # todo: compare with maxlim, although not really needed in practice
-    # limits = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    limits = np.array([0.4, 0.4, 0.4, 0.4, 0.4, 0.4])
 
     audio_index = 0
     data_index = 0
