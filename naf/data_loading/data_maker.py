@@ -89,7 +89,7 @@ def resample_data(wave_data, sr=16000, resample_rate=22050):
 
 def main():
     args = Options().parse()
-    base_path = f'../metadata/ambisonics_{args.order}_{args.grid}_rm'
+    base_path = f'../metadata/ambisonics_{args.order}_{args.grid}'
     mag_path = f'{base_path}/magnitudes'
     pathlib.Path(mag_path).mkdir(parents=True, exist_ok=True)
     phase_path = f'{base_path }/phases'
@@ -102,7 +102,7 @@ def main():
     rooms = ['test_1']
     max_len_dict = {}
     spec_getter = GetSpec(components=args.components)
-    with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}_rm/rirs.pickle', 'rb') as f:
+    with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_10.0x6.0x2.5/grid_{args.grid}/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
     for room_name in rooms:
