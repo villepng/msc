@@ -67,7 +67,7 @@ class KernelResidualFCEmbeds(nn.Module):
         self.xy_offset = nn.Parameter(torch.zeros_like(self.grid_coors_xy), requires_grad=True)
         self.grid_0 = nn.Parameter(torch.randn(len(grid_coors_x), grid_ch, device='cpu').float() / np.sqrt(float(grid_ch)), requires_grad=True)
 
-    def forward(self, input_stuff, rot_idx, sound_loc=None):
+    def forward(self, input_stuff, sound_loc=torch.from_numpy(np.array([[0.0, 0.0, 0.0, 0.0]])).cuda().float()):  # torch.from_numpy(np.array([[0.0, 0.0, 0.0, 0.0]])).cuda().float() (sound_loc for network plotting)
         samples = input_stuff.shape[1]
         sound_loc_v0 = sound_loc[..., :2]
         sound_loc_v1 = sound_loc[..., 2:]

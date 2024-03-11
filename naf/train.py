@@ -139,7 +139,7 @@ def train_net(rank, world_size, freeport, args):
             total_in = torch.cat((position_embed, freq_embed, time_embed), dim=2)
             optimizer.zero_grad(set_to_none=False)
             try:
-                output = ddp_auditory_net(total_in, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
+                output = ddp_auditory_net(total_in, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
             except Exception as e:
                 print(gt.shape, degree.shape, position.shape, freqs.shape, times.shape, position_embed.shape,
                       freq_embed.shape, time_embed.shape)

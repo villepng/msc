@@ -14,6 +14,7 @@ import naf.utils as utl
 from pyroomacoustics.experimental.rt60 import measure_rt60
 from scipy.io import wavfile
 from scipy.signal import fftconvolve
+from torchview import draw_graph
 
 from naf.model.modules import EmbeddingModuleLog
 from naf.model.networks import KernelResidualFCEmbeds
@@ -161,7 +162,9 @@ def test_model(args, test_points=None, write_errors=True):
             net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
             network.eval()
             with torch.no_grad():
-                output = network(net_input, degree, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
+                model_graph = draw_graph(network, input_size=(1, 5376, 126), graph_dir='LR', device='cuda:0')  # input_data=(net_input, degree, non_norm_position.squeeze(1))
+                model_graph.visual_graph.render(format='pdf')
+                output = network(net_input, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
             # phase = output[:, :, :, 1]
             # output = output[:, :, :, 0]
             # phase = (output.reshape(1, args.components, args.freq_bins, max_len).cpu() * std_phase).numpy()
@@ -299,7 +302,7 @@ def test_model(args, test_points=None, write_errors=True):
                 # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
                 # plt.legend()
                 # plt.show()
-            if key in args.test_points and False:
+            if key in args.test_points:
                 '''with open(f'./out/tmp/{key}.pkl', 'wb') as f:
                     pickle.dump(predicted_rir, f)
                 with open(f'./out/tmp/{key}_gt.pkl', 'wb') as f:
