@@ -116,7 +116,7 @@ def plot_errors_binaural(full_data):
                 y_low, y_high = ax.get_ylim()
                 ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
                 c += 2
-            plt.ylabel(f'{error.upper()}')
+            plt.ylabel(f'{error.upper()}') if error == 'icc' else plt.ylabel(f'{error.upper()} (dB)')
         plt.legend()
         plt.show()
 
