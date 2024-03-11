@@ -92,6 +92,35 @@ def plot_errors(full_data, error):
     plt.show()
 
 
+def plot_errors_binaural(full_data):
+    # Technicall plots gt and prediction and not errors
+    centerfreqs = [125, 250, 500, 1000, 2000, 4000]
+    colours = ['black', 'grey', 'green', 'mediumseagreen', 'steelblue', 'lightskyblue']
+    labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz']
+    for error in ['ild', 'icc']:
+        fig, ax = plt.subplots()
+        ax.set_prop_cycle(plt.cycler('color', plt.cm.jet(np.linspace(0, 1, 6))))
+        plt.xticks(np.arange(6), labels)
+        c = 0
+        for method, data in full_data.items():
+            train_test = ['train', 'test'] if 'off-grid' not in method else ['train']
+            for types in train_test:
+                gt, pred = [], []
+                for freq in centerfreqs:
+                    gt.append(np.mean(data[types]['binaural'][freq][f'{error}_gt']))
+                    pred.append(np.mean(data[types]['binaural'][freq][f'{error}_pred']))
+                label = f'{method} {types}' if 'test' in train_test else f'{method}'
+                plt.plot(labels, gt, 'o-', label=f'{label} GT', color=colours[c])
+                plt.plot(labels, pred, 'o-', label=f'{label} prediction', color=colours[c + 1])
+                x_left, x_right = ax.get_xlim()
+                y_low, y_high = ax.get_ylim()
+                ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
+                c += 2
+            plt.ylabel(f'{error.upper()}')
+        plt.legend()
+        plt.show()
+
+
 def plot_errors_directional(full_data, error):
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
     colours = ['black', 'mediumseagreen', 'green']
@@ -427,6 +456,7 @@ if __name__ == '__main__':
     # directed
     for metric in ['mse', 'rt60', 'c50']:
         plot_errors_directional(directed, metric)'''
+    plot_errors_binaural(directed)
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
