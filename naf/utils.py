@@ -95,7 +95,7 @@ def plot_errors(full_data, error):
 def plot_errors_binaural(full_data):
     # Technicall plots gt and prediction and not errors
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
-    colours = ['black', 'grey', 'green', 'mediumseagreen', 'steelblue', 'lightskyblue']
+    colours = ['black', 'grey', 'green', 'mediumseagreen', 'royalblue', 'lightskyblue']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz']
     for error in ['ild', 'icc']:
         fig, ax = plt.subplots()
@@ -478,7 +478,7 @@ if __name__ == '__main__':
     # plot_tmp(gt_close_0, pred_close_0, stft_close_0)
     # plot_tmp(gt_far_0, pred_far_0, stft_far_0)
 
-    t = np.arange(len(gt_edc_close)) / 16000
+    '''t = np.arange(len(gt_edc_close)) / 16000
     axes = plt.axes()
     axes.set_xlim([0, 0.33])
     axes.set_ylim([-120, 1])
@@ -492,7 +492,7 @@ if __name__ == '__main__':
     plt.ylabel('Energy (dB)')
     plt.xlabel('Time (s)')
     plt.legend()
-    plt.show()
+    plt.show()'''
 
     from rir_generation import create_grid
     main_grid = create_grid([20, 10], 1.0, [10.0, 6.0, 2.5])
