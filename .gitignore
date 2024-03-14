@@ -4,5 +4,7 @@ __pycache__/
 /naf/metadata*
 /naf/out
 /naf/test_results
+*.gv
+*.pdf
 *.txt
 *.wav
