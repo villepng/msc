@@ -107,8 +107,12 @@ def plot_errors_binaural(full_data):
             for types in train_test:
                 gt, pred = [], []
                 for freq in centerfreqs:
-                    gt.append(np.mean(data[types]['binaural'][freq][f'{error}_gt']))
-                    pred.append(np.mean(data[types]['binaural'][freq][f'{error}_pred']))
+                    if error == 'ild':
+                        gt.append(np.mean(np.abs(data[types]['binaural'][freq][f'{error}_gt'])))
+                        pred.append(np.mean(np.abs(data[types]['binaural'][freq][f'{error}_pred'])))
+                    else:
+                        gt.append(np.mean(data[types]['binaural'][freq][f'{error}_gt']))
+                        pred.append(np.mean(data[types]['binaural'][freq][f'{error}_pred']))
                 label = f'{method} {types}' if 'test' in train_test else f'{method}'
                 plt.plot(labels, gt, 'o-', label=f'{label} GT', color=colours[c])
                 plt.plot(labels, pred, 'o-', label=f'{label} prediction', color=colours[c + 1])
@@ -116,7 +120,7 @@ def plot_errors_binaural(full_data):
                 y_low, y_high = ax.get_ylim()
                 ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
                 c += 2
-            plt.ylabel(f'{error.upper()}') if error == 'icc' else plt.ylabel(f'{error.upper()} (dB)')
+            plt.ylabel(f'{error.upper()}') if error == 'icc' else plt.ylabel(f'|{error.upper()}| (dB)')
         plt.legend()
         plt.show()
 
@@ -308,7 +312,10 @@ def print_errors(error_metrics):  # train, channel, band, metric
                         else:
                             print(f'      band {submetric}:')
                             for key, val in value.items():
-                                print(f'        {key}: {np.average(val):.9f}')
+                                if 'ild' in key:
+                                    print(f'        {key}: {np.average(np.abs(val)):.9f}')
+                                else:
+                                    print(f'        {key}: {np.average(val):.9f}')
                 else:
                     print(f'    avg. {metric}: {np.average(data):.9f}')
     for train_test in ['train', 'test']:
@@ -454,8 +461,8 @@ if __name__ == '__main__':
         plot_errors(full, metric)
     # directed
     for metric in ['mse', 'rt60', 'c50']:
-        plot_errors_directional(directed, metric)
-    plot_errors_binaural(directed)'''
+        plot_errors_directional(directed, metric)'''
+    # plot_errors_binaural(directed)
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
@@ -494,7 +501,7 @@ if __name__ == '__main__':
     plt.show()'''
 
     from rir_generation import create_grid
-    x, y, z = 5.0, 5.0, 5.0  # 4.5, 5.75, 2.5
+    x, y, z = 5.0, 5.0, 5.0  # 4.0, 5.75, 2.5
     main_grid = create_grid([14, 14], 1.0, [x, y, z])
     small_grid = create_grid([5, 10], 1.25, [x, y, z])
 
