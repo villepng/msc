@@ -76,7 +76,7 @@ def plot_errors(full_data, error):
                 errors.append(np.mean(full_data[method][types][0][freq][error]))
             errors.append(np.mean(full_data[method][types][0][f'{error}_']))  # broadband
             errors = 100 * np.array(errors) if error == 'rt60' else errors
-            label = f'{method} {types}' if 'test' in train_test else f'{method}'
+            label = f'{method} {types}' if 'train' in train_test else f'{method}'
             ax.plot(labels, errors, 'o-', label=label, color=colours[c])
             x_left, x_right = ax.get_xlim()
             y_low, y_high = ax.get_ylim()
@@ -113,21 +113,21 @@ def plot_errors_binaural(full_data):
                     else:
                         gt.append(np.mean(data[types]['binaural'][freq][f'{error}_gt']))
                         pred.append(np.mean(data[types]['binaural'][freq][f'{error}_pred']))
-                label = f'{method} {types}' if 'test' in train_test else f'{method}'
+                label = f'{method} {types}' if 'train' in train_test else f'{method}'
                 plt.plot(labels, gt, 'o-', label=f'{label} GT', color=colours[c])
                 plt.plot(labels, pred, 'o-', label=f'{label} prediction', color=colours[c + 1])
                 x_left, x_right = ax.get_xlim()
                 y_low, y_high = ax.get_ylim()
                 ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
                 c += 2
-            plt.ylabel(f'{error.upper()}') if error == 'icc' else plt.ylabel(f'|{error.upper()}| (dB)')
+            plt.ylabel(f'IACC') if error == 'icc' else plt.ylabel(f'|{error.upper()}| (dB)')
         plt.legend()
         plt.show()
 
 
 def plot_errors_directional(full_data, error):
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
-    colours = ['black', 'mediumseagreen', 'green']
+    colours = ['grey', 'mediumseagreen', 'lightskyblue', 'black', 'green', 'royalblue']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', 'broadband']
     fig, ax = plt.subplots()
     plt.xticks(np.arange(7), labels)
@@ -140,7 +140,7 @@ def plot_errors_directional(full_data, error):
                 errors.append(np.mean(data[types]['dir_rir'][freq][error]))
             errors.append(np.mean(data[types]['dir_rir'][error]))  # broadband
             errors = 100 * np.array(errors) if error == 'rt60' else errors
-            label = f'{method} {types}' if 'test' in train_test else f'{method}'
+            label = f'{method} {types}' if 'train' in train_test else f'{method}'
             plt.plot(labels, errors, 'o-', label=label, color=colours[c])
             x_left, x_right = ax.get_xlim()
             y_low, y_high = ax.get_ylim()
@@ -450,11 +450,12 @@ if __name__ == '__main__':
 
     # plot error metrics for omni data, 'errors_ph' for comparisons with gt phase reconstruction
     off_grid = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f.pkl')
-    off_grid_sh = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f.pkl')
+    off_grid_sh, off_grid_sh_ph = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f.pkl'), load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f_ph.pkl')
     mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f.pkl')
-    sh = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f.pkl')
+    sh, sh_ph = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f.pkl'), load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f_ph.pkl')
     full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
-    directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']}
+    directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional'],
+                'GT phase off-grid': off_grid_sh_ph['directional'], 'GT phase on-grid': sh_ph['directional']}
 
     # normal
     '''for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
@@ -462,7 +463,7 @@ if __name__ == '__main__':
     # directed
     for metric in ['mse', 'rt60', 'c50']:
         plot_errors_directional(directed, metric)'''
-    # plot_errors_binaural(directed)
+    # plot_errors_binaural({'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']})
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
