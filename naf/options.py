@@ -78,7 +78,7 @@ class Options:
 
         # network arguments
         parser.add_argument('--layers', default=8, type=int, help='number of layers in the network')
-        parser.add_argument('--grid_gap', default=0.4, type=float, help='how far are the grid points spaced')
+        parser.add_argument('--grid_gap', nargs=2, default=[0.4, 0.4], type=float, help='how far are the grid points spaced')
         parser.add_argument('--bandwith_init', default=0.4, type=float, help='initial bandwidth of the grid')
         parser.add_argument('--features', default=512, type=int, help='number of neurons in the network for each layer')
         parser.add_argument('--grid_features', default=64, type=int, help='number of neurons in the grid')
