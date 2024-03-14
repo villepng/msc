@@ -69,7 +69,7 @@ def plot_errors(full_data, error):
     plt.xticks(np.arange(7), labels)
     c = 0
     for method in ['off-grid mono', 'off-grid omni channel', 'on-grid mono', 'on-grid omni channel']:
-        train_test = ['train', 'test'] if 'off-grid' not in method else ['train']
+        train_test = ['train', 'test'] if 'off-grid' not in method else ['test']
         for types in train_test:
             errors = []
             for freq in centerfreqs:
@@ -103,7 +103,7 @@ def plot_errors_binaural(full_data):
         plt.xticks(np.arange(6), labels)
         c = 0
         for method, data in full_data.items():
-            train_test = ['train', 'test'] if 'off-grid' not in method else ['train']
+            train_test = ['train', 'test'] if 'off-grid' not in method else ['test']
             for types in train_test:
                 gt, pred = [], []
                 for freq in centerfreqs:
@@ -129,7 +129,7 @@ def plot_errors_directional(full_data, error):
     plt.xticks(np.arange(7), labels)
     c = 0
     for method, data in full_data.items():
-        train_test = ['train', 'test'] if 'off-grid' not in method else ['train']
+        train_test = ['train', 'test'] if 'off-grid' not in method else ['test']
         for types in train_test:
             errors = []
             for freq in centerfreqs:
@@ -362,7 +362,7 @@ def to_wave_if(input_stft, input_if, hop_len):
     return wave
 
 
-def plot_tmp(gt_rir, pred_rir, pred_stft, gt_far=None, pred_far=None, fs=16000, n_fft=128, channel=0):
+def plot_tmp(gt_rir, pred_rir, pred_stft, gt_far=None, pred_far=None, fs=16000, n_fft=128, channel=0, edc_len=5312):
     t = np.arange(len(gt_rir[0])) / 16000
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
@@ -388,22 +388,22 @@ def plot_tmp(gt_rir, pred_rir, pred_stft, gt_far=None, pred_far=None, fs=16000, 
     plot = axarr[0, 0].pcolormesh(t_fft, f, gt_spec[channel])
     axarr[0, 0].set_title(f'GT spectrogram')
     _, edc = metrics.get_edc(gt_rir[channel])
-    axarr[0, 1].plot(t, edc[:5440], label=f'broadband')
+    axarr[0, 1].plot(t, edc[:edc_len], label=f'broadband')
     axarr[0, 1].set_title(f'GT EDC')
     for i in range(6):
         _, edc = metrics.get_edc(filtered_gt[:, i])
-        axarr[0, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
+        axarr[0, 1].plot(t, edc[:edc_len], label=f'{band_centerfreqs[i]} Hz')
     axarr[0, 2].plot(t, gt_rir[channel], c='mediumseagreen')
     axarr[0, 2].set_title(f'GT RIR waveform')
 
     plot2 = axarr[1, 0].pcolormesh(t_fft2, f, pred_stft[0, channel])
     axarr[1, 0].set_title(f'Predicted spectrogram')
     _, edc = metrics.get_edc(pred_rir[channel])
-    axarr[1, 1].plot(t, edc[:5440], label=f'broadband')
+    axarr[1, 1].plot(t, edc[:edc_len], label=f'broadband')
     axarr[1, 1].set_title(f'Predicted EDC')
     for i in range(6):
         _, edc = metrics.get_edc(filtered_pred[:, i])
-        axarr[1, 1].plot(t, edc[:5440], label=f'{band_centerfreqs[i]} Hz')
+        axarr[1, 1].plot(t, edc[:edc_len], label=f'{band_centerfreqs[i]} Hz')
     axarr[1, 2].plot(t, pred_rir[channel], c='mediumseagreen')
     axarr[1, 2].set_title(f'Predicted RIR waveform')
 
@@ -442,21 +442,20 @@ if __name__ == '__main__':
     plt.rcParams.update({'font.size': 22})
 
     # plot error metrics for omni data, 'errors_ph' for comparisons with gt phase reconstruction
-    off_grid = load_pkl(f'./out/ambisonics_0_4x2/metrics/errors.pkl')
-    off_grid_sh = load_pkl(f'./out/ambisonics_1_4x2/metrics/errors.pkl')
-    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors.pkl')
-    sh = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors.pkl')
+    off_grid = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f.pkl')
+    off_grid_sh = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f.pkl')
+    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f.pkl')
+    sh = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f.pkl')
     full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
     directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']}
 
     # normal
     '''for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
         plot_errors(full, metric)
-
     # directed
     for metric in ['mse', 'rt60', 'c50']:
-        plot_errors_directional(directed, metric)'''
-    plot_errors_binaural(directed)
+        plot_errors_directional(directed, metric)
+    plot_errors_binaural(directed)'''
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
@@ -495,8 +494,9 @@ if __name__ == '__main__':
     plt.show()'''
 
     from rir_generation import create_grid
-    main_grid = create_grid([20, 10], 1.0, [10.0, 6.0, 2.5])
-    small_grid = create_grid([10, 5], 1.25, [10.0, 6.0, 2.5])
+    x, y, z = 5.0, 5.0, 5.0  # 4.5, 5.75, 2.5
+    main_grid = create_grid([14, 14], 1.0, [x, y, z])
+    small_grid = create_grid([5, 10], 1.25, [x, y, z])
 
     rng = np.random.default_rng(0)
     rng.shuffle(main_grid)
@@ -513,7 +513,7 @@ if __name__ == '__main__':
     axes.scatter(train_p[:, 1], train_p[:, 0], c='k', label='Main grid train points')
     axes.scatter(test_p[:, 1], test_p[:, 0], marker='h', c='dodgerblue', label='Main grid test points')
     axes.scatter(small_grid[:, 1], small_grid[:, 0], marker='x', c='mediumseagreen', label='Off-grid test points')
-    r = plt.Rectangle((0.0, 0.0), 6.0, 10.0, fill=False, edgecolor='k', linewidth=2.0)
+    r = plt.Rectangle((0.0, 0.0), y, x, fill=False, edgecolor='k', linewidth=2.0)
     axes.add_patch(r)
     # axes.set_xlim([0.0, 6.0])
     # axes.set_ylim([0.0, 10.0])

@@ -130,6 +130,9 @@ def test_model(args, test_points=None, write_errors=True):
     if test_points is not None:
         train_keys[orientation] = []
         test_keys[orientation] = test_points
+    '''if True:  # todo, use for now to not split off-grid data
+        test_keys[orientation].extend(train_keys[orientation])
+        train_keys[orientation] = []'''
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
     # Polling the network to calculate error metrics
@@ -162,8 +165,8 @@ def test_model(args, test_points=None, write_errors=True):
             net_input, degree, non_norm_position = embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device)
             network.eval()
             with torch.no_grad():
-                model_graph = draw_graph(network, input_size=(1, 5376, 126), graph_dir='LR', device='cuda:0')  # input_data=(net_input, degree, non_norm_position.squeeze(1))
-                model_graph.visual_graph.render(format='pdf')
+                # model_graph = draw_graph(network, input_size=(1, 5376, 126), graph_dir='TB', depth=6, device='cuda:0')  # input_data=(net_input, degree, non_norm_position.squeeze(1))
+                # model_graph.visual_graph.render(format='pdf')
                 output = network(net_input, non_norm_position.squeeze(1)).squeeze(3).transpose(1, 2)
             # phase = output[:, :, :, 1]
             # output = output[:, :, :, 0]
@@ -302,7 +305,7 @@ def test_model(args, test_points=None, write_errors=True):
                 # plt.title(f'Delay: {delay} samples ({src}-{rcv})')
                 # plt.legend()
                 # plt.show()
-            if key in args.test_points:
+            if key in args.test_points and False:
                 '''with open(f'./out/tmp/{key}.pkl', 'wb') as f:
                     pickle.dump(predicted_rir, f)
                 with open(f'./out/tmp/{key}_gt.pkl', 'wb') as f:

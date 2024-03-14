@@ -99,7 +99,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     # maxlim = 0.8  # 0.8, 1s
     # limits = np.empty(nBands)
     # limits.fill(np.minimum(rt60[0], maxlim))
-    limits = np.array([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
+    limits = 0.5 * np.array([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
 
     audio_index = 0
     data_index = 0
