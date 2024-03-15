@@ -99,10 +99,10 @@ def main():
     # early_len = int(fs * early_ms / 1000)  # save 50ms from the start as wav, used for datasets where sound travel time is removed
     # early_path = f'{base_path}/early'
     # pathlib.Path(early_path).mkdir(parents=True, exist_ok=True)
-    rooms = ['test_2']  # name from args.apt
+    rooms = [args.apt]  # option for many?
     max_len_dict = {}
     spec_getter = GetSpec(components=args.components)
-    with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_4.0x5.75x2.5/grid_{args.grid}/rirs.pickle', 'rb') as f:  # room parameter
+    with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_{args.room}/grid_{args.grid}/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 
     for room_name in rooms:

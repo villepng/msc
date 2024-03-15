@@ -52,8 +52,8 @@ def embed_input(args, rcv_pos, src_pos, max_len, min_pos, max_pos, output_device
 
 
 def load_gt_data(args):
-    spec_obj = h5py.File(f'{args.spec_base}/test_1.h5', 'r')
-    phase_obj = h5py.File(f'{args.phase_base}/test_1.h5', 'r')
+    spec_obj = h5py.File(f'{args.spec_base}/{args.apt}.h5', 'r')
+    phase_obj = h5py.File(f'{args.phase_base}/{args.apt}.h5', 'r')
     with open(f'metadata/ambisonics_{args.order}_{args.grid}/normalization/{args.apt}_max_val.txt', 'r') as f:
         max_val = f.readlines()
 
@@ -187,7 +187,7 @@ def test_model(args, test_points=None, write_errors=True):
             # predicted_rir = utl.to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
             gt_rir = utl.to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
             # utl.plot_stft(phase, phase_data, key)
-            # gt_rir = utl.to_wave(spec_data[0])[0]  # test reconstructing GT with random phase
+            # gt_rir = utl.to_wave(spec_data[0], args.hop_len)  # test reconstructing GT with random phase
             # t = np.arange(len(gt_rir)) / 16000
             # plt.plot(t, 20*np.log10(abs(gt_rir)))
             # plt.show()
