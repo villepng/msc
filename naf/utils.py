@@ -445,6 +445,46 @@ def plot_tmp(gt_rir, pred_rir, pred_stft, gt_far=None, pred_far=None, fs=16000, 
     plt.show()
 
 
+def plot_room():
+    from rir_generation import create_grid
+    x, y, z = 6.0, 6.0, 3.0  # 4.0, 5.75, 2.5
+    main_grid = create_grid([14, 14], 1.0, [x, y, z])
+    small_grid = create_grid([5, 10], 1.25, [x, y, z])
+
+    rng = np.random.default_rng(0)
+    rng.shuffle(main_grid)
+    pairs = main_grid.shape[0]
+    train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
+    train_p, test_p = main_grid[:train], main_grid[train:train+test]
+
+    axes = plt.axes()
+    x_left, x_right = axes.get_xlim()
+    y_low, y_high = axes.get_ylim()
+    axes.set_aspect(abs((x_right - x_left) / (y_low - y_high)))
+    axes.set_xticks(np.arange(0, 7, step=1.0))
+    axes.set_yticks(np.arange(0, 11, step=1.0))
+    axes.scatter(train_p[:, 1], train_p[:, 0], c='k', label='Main grid train points')
+    axes.scatter(test_p[:, 1], test_p[:, 0], marker='h', c='dodgerblue', label='Main grid test points')
+    axes.scatter(small_grid[:, 1], small_grid[:, 0], marker='x', c='mediumseagreen', label='Off-grid test points')
+    r = plt.Rectangle((0.0, 0.0), y, x, fill=False, edgecolor='k', linewidth=2.0)
+    axes.add_patch(r)
+    # axes.set_xlim([0.0, 6.0])
+    # axes.set_ylim([0.0, 10.0])
+    plt.legend()
+    plt.show()
+
+
+def test(full_data, error, freq=250):
+    for method in ['off-grid mono', 'off-grid omni channel', 'on-grid mono', 'on-grid omni channel']:
+        train_test = ['train', 'test'] if 'off-grid' not in method else ['test']
+        for types in train_test:
+            for freq in [125, 250, 500, 1000, 2000, 4000]:
+                counts, bins = np.histogram(full_data[method][types][0][freq][error], 100)
+                plt.stairs(counts, bins, fill=True)
+                plt.title(f'{freq} Hz: {method} {types}')
+                plt.show()
+
+
 if __name__ == '__main__':
     plt.rcParams.update({'font.size': 22})
 
@@ -459,11 +499,12 @@ if __name__ == '__main__':
 
     # normal
     '''for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
-        plot_errors(full, metric)
+        plot_errors(full, metric)'''
     # directed
-    for metric in ['mse', 'rt60', 'c50']:
+    '''for metric in ['mse', 'rt60', 'c50']:
         plot_errors_directional(directed, metric)'''
     # plot_errors_binaural({'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']})
+    test(full, 'edc')
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
@@ -501,30 +542,5 @@ if __name__ == '__main__':
     plt.legend()
     plt.show()'''
 
-    from rir_generation import create_grid
-    x, y, z = 5.0, 5.0, 5.0  # 4.0, 5.75, 2.5
-    main_grid = create_grid([14, 14], 1.0, [x, y, z])
-    small_grid = create_grid([5, 10], 1.25, [x, y, z])
-
-    rng = np.random.default_rng(0)
-    rng.shuffle(main_grid)
-    pairs = main_grid.shape[0]
-    train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
-    train_p, test_p = main_grid[:train], main_grid[train:train+test]
-
-    axes = plt.axes()
-    x_left, x_right = axes.get_xlim()
-    y_low, y_high = axes.get_ylim()
-    axes.set_aspect(abs((x_right - x_left) / (y_low - y_high)))
-    axes.set_xticks(np.arange(0, 7, step=1.0))
-    axes.set_yticks(np.arange(0, 11, step=1.0))
-    axes.scatter(train_p[:, 1], train_p[:, 0], c='k', label='Main grid train points')
-    axes.scatter(test_p[:, 1], test_p[:, 0], marker='h', c='dodgerblue', label='Main grid test points')
-    axes.scatter(small_grid[:, 1], small_grid[:, 0], marker='x', c='mediumseagreen', label='Off-grid test points')
-    r = plt.Rectangle((0.0, 0.0), y, x, fill=False, edgecolor='k', linewidth=2.0)
-    axes.add_patch(r)
-    # axes.set_xlim([0.0, 6.0])
-    # axes.set_ylim([0.0, 10.0])
-    plt.legend()
-    plt.show()
+    # plot_room()
 
