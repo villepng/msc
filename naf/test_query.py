@@ -232,10 +232,6 @@ def test_model(args, test_points=None, write_errors=True):
                     rt60_pred, _ = metrics.get_rt_from_edc(edc_db_pred, fs)
                     _, edc_db_gt = metrics.get_edc(gt_rir[component])
                     rt60_gt, _ = metrics.get_rt_from_edc(edc_db_gt, fs)
-
-                    rt60_pred = measure_rt60(predicted_rir[component], fs, 30)
-                    rt60_gt = measure_rt60(gt_rir[component], fs, 30)
-
                     error_metrics[train_test][component]['rt60_'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
                     error_metrics[train_test][component]['edc_'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
 
@@ -276,10 +272,6 @@ def test_model(args, test_points=None, write_errors=True):
                         rt60_pred, a1 = metrics.get_rt_from_edc(edc_db_pred, fs)
                         _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
                         rt60_gt, a2 = metrics.get_rt_from_edc(edc_db_gt, fs)
-
-                        rt60_pred = measure_rt60(filtered_pred[:, band], fs, 30)
-                        rt60_gt = measure_rt60(filtered_gt[:, band], fs, 30)
-
                         error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
                         error_metrics[train_test][component][band_centerfreqs[band]]['edc'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
                         '''t = np.arange(len(edc_db_gt)) / fs
