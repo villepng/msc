@@ -3,6 +3,8 @@ import numpy as np
 import scipy
 import spaudiopy as spa
 
+from pyroomacoustics.experimental.rt60 import measure_rt60
+
 
 def calculate_binaural_error_metrics(pred_rir, gt_rir, rng, error_metrics, train_test, src, rcv, fs=16000, order=1):
     """
@@ -129,9 +131,13 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
     # Calculate "normal" metrics for directed RIRs
     error_metrics['directional'][train_test]['dir_rir']['mse'].append(np.square(dir_rir_pred - dir_rir_gt).mean())
     _, edc_db_pred = get_edc(dir_rir_pred)
-    rt60_pred = get_rt_from_edc(edc_db_pred, fs)
+    rt60_pred, _ = get_rt_from_edc(edc_db_pred, fs)
     _, edc_db_gt = get_edc(dir_rir_gt)
-    rt60_gt = get_rt_from_edc(edc_db_gt, fs)
+    rt60_gt, _ = get_rt_from_edc(edc_db_gt, fs)
+
+    rt60_pred = measure_rt60(dir_rir_pred, fs, 30)
+    rt60_gt = measure_rt60(dir_rir_gt, fs, 30)
+
     error_metrics['directional'][train_test]['dir_rir']['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
     c50_pred = 10 * np.log10(get_c50(dir_rir_pred, delay))
     c50_gt = 10 * np.log10(get_c50(dir_rir_gt, delay))
@@ -147,9 +153,13 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
     for band in range(bands):
         error_metrics['directional'][train_test]['dir_rir'][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[:, band], filtered_gt[:, band])).mean())
         _, edc_db_pred = get_edc(filtered_pred[:, band])
-        rt60_pred = get_rt_from_edc(edc_db_pred, fs)
+        rt60_pred, _ = get_rt_from_edc(edc_db_pred, fs)
         _, edc_db_gt = get_edc(filtered_gt[:, band])
-        rt60_gt = get_rt_from_edc(edc_db_gt, fs)
+        rt60_gt, _ = get_rt_from_edc(edc_db_gt, fs)
+
+        rt60_pred = measure_rt60(filtered_pred[:, band], fs, 30)
+        rt60_gt = measure_rt60(filtered_gt[:, band], fs, 30)
+
         error_metrics['directional'][train_test]['dir_rir'][band_centerfreqs[band]]['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
         c50_pred = 10 * np.log10(get_c50(filtered_pred[:, band], delay))
         c50_gt = 10 * np.log10(get_c50(filtered_gt[:, band], delay))
@@ -298,7 +308,7 @@ def get_edc(rir, normalize=True):
     return edc, edc_db
 
 
-def get_rt_from_edc(edc_db, fs, offset_db=15, rt_interval_db=20):
+def get_rt_from_edc(edc_db, fs, offset_db=10, rt_interval_db=20):
     # normalize initial value of EDC top 0 dB
     edc_db -= edc_db[0]
 
@@ -326,7 +336,7 @@ def get_rt_from_edc(edc_db, fs, offset_db=15, rt_interval_db=20):
     plt.scatter(rt60, -60)
     plt.show()'''
 
-    return rt60
+    return rt60, a
 
 
 if __name__ == '__main__':

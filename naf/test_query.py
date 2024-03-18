@@ -229,9 +229,13 @@ def test_model(args, test_points=None, write_errors=True):
                     error_metrics[train_test][component]['mse_'].append(np.square(np.subtract(predicted_rir[component, delay:win_end], gt_rir[component, delay:win_end])).mean())
                     # error_metrics[train_test]['mse_wav'].append(np.square(np.subtract(reverb_pred, ambisonic)).mean())  # todo check which is longer and slice
                     _, edc_db_pred = metrics.get_edc(predicted_rir[component])
-                    rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
+                    rt60_pred, _ = metrics.get_rt_from_edc(edc_db_pred, fs)
                     _, edc_db_gt = metrics.get_edc(gt_rir[component])
-                    rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
+                    rt60_gt, _ = metrics.get_rt_from_edc(edc_db_gt, fs)
+
+                    rt60_pred = measure_rt60(predicted_rir[component], fs, 30)
+                    rt60_gt = measure_rt60(gt_rir[component], fs, 30)
+
                     error_metrics[train_test][component]['rt60_'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
                     error_metrics[train_test][component]['edc_'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
 
@@ -269,12 +273,21 @@ def test_model(args, test_points=None, write_errors=True):
                         # plot_wave(filtered_pred[:, band], filtered_gt[:, band], f'{src}-{rcv}, {component}-{band}')
                         error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[delay:win_end, band], filtered_gt[delay:win_end, band])).mean())
                         _, edc_db_pred = metrics.get_edc(filtered_pred[:, band])
-                        rt60_pred = metrics.get_rt_from_edc(edc_db_pred, fs)
+                        rt60_pred, a1 = metrics.get_rt_from_edc(edc_db_pred, fs)
                         _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
-                        rt60_gt = metrics.get_rt_from_edc(edc_db_gt, fs)
+                        rt60_gt, a2 = metrics.get_rt_from_edc(edc_db_gt, fs)
+
+                        rt60_pred = measure_rt60(filtered_pred[:, band], fs, 30)
+                        rt60_gt = measure_rt60(filtered_gt[:, band], fs, 30)
+
                         error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
                         error_metrics[train_test][component][band_centerfreqs[band]]['edc'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
                         '''t = np.arange(len(edc_db_gt)) / fs
+                        t2 = np.arange(rt60_pred * fs) / fs
+                        plt.plot(t2, a1 * t2, label='pred')
+                        t3 = np.arange(rt60_gt * fs) / fs
+                        plt.plot(t3, a2 * t3, label='gt')
+
                         plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                         plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
                         plt.plot(t, np.ones(np.size(t)) * -60)
@@ -282,7 +295,7 @@ def test_model(args, test_points=None, write_errors=True):
                         plt.scatter(rt60_gt, -60, label='GT RT60')
                         # measure_rt60(filtered_pred[:, band], fs, 30, True)
                         # measure_rt60(filtered_gt[:, band], fs, 30, True)
-                        plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv}, {component}-{band})')
+                        plt.title(f'Delay: {delay / fs:.3f}s ({src}-{rcv}, {band_centerfreqs[band]} Hz:{component}-{band})')
                         plt.legend()
                         plt.show()'''
 
