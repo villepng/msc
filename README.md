@@ -1,6 +1,12 @@
+# Usage
+
+rir_generation.py can be used to generate reverberant audio files and pickle RIRs with wanted parameters (SH order, room size etc.)
+
+todo
+
 # Notes
 
-Most of the code under naf/ adapted from [Learning neural acoustic fields](https://github.com/aluo-x/Learning_Neural_Acoustic_Fields)
+Model and dataset/training under naf/ adapted from [Learning neural acoustic fields](https://github.com/aluo-x/Learning_Neural_Acoustic_Fields)
 
 ```
 @article{luo2022learning,
