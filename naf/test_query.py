@@ -216,11 +216,11 @@ def test_model(args, test_points=None, write_errors=True):
             # Calculate ambisonic error metrics
             delay = metrics.get_delay_samples(src_pos, rcv_pos)
             win_end = delay + wave_mse_window
-            if args.components == 4:  # todo: directional errors for 2nd order?
+            if args.components > 1:
                 error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
                 error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
                 metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, RNG, delay, error_metrics, train_test, src_pos, rcv_pos)
-                metrics.calculate_binaural_error_metrics(predicted_rir, gt_rir, RNG, error_metrics, train_test, src, rcv)
+                metrics.calculate_binaural_error_metrics(predicted_rir, gt_rir, RNG, error_metrics, train_test, src, rcv, order=int(args.order))
 
             if True:  # and key in args.test_points
                 # Filter and calculate error metrics

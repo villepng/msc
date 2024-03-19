@@ -98,12 +98,13 @@ def calculate_directed_rir_errors(pred_rir, gt_rir, rng, delay, error_metrics, t
     :param fs: sample rate
     :return: None
     """
-    if pred_rir.shape[0] != 4 or gt_rir.shape[0] != 4:
-        raise NotImplementedError('RIRs must be 1st order ambisonics')
-    # elevation = 0  # currently not used, if updated change * 1's to * np.cos(elevation)
+    if 4 > pred_rir.shape[0] > 9 or 4 > gt_rir.shape[0] > 9:
+        raise NotImplementedError('RIRs must be 1st or 2nd order ambisonics')
+    # elevation = 0  # currently not used, if updated change shs, or use more proper sh "getter"
     azimuth = rng.uniform(0, 2 * np.pi)  # randomly select the angle for each point
     # azimuth = np.arctan2(rcv_pos[0] - src_pos[0], rcv_pos[1] - src_pos[1])  # test vs. gt
-    beamer = np.array([1, np.sin(azimuth) * 1, 0, np.cos(azimuth) * 1])
+    beamer = np.array([1, np.sin(azimuth), 0, np.cos(azimuth),
+                       np.sqrt(3) / 2 * np.sin(2 * azimuth), 0, -1 / 2, 0, np.sqrt(3) / 2 * np.cos(2 * azimuth)])
     dir_rir_pred = np.zeros([pred_rir.shape[-1]])
     dir_rir_gt = np.zeros([pred_rir.shape[-1]])
     for channel in range(pred_rir.shape[0]):

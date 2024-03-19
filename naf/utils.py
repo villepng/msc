@@ -8,6 +8,8 @@ import pickle
     Various helper functions, mostly for plotting network query results (in test_query.py)
 """
 
+AMBI_CHN = ['W', 'Y', 'Z', 'X', 'V', 'T', 'R', 'S', 'U']
+
 METRICS_BAND = ['mse', 'rt60', 'drr', 'c50', 'edc', 'errors']
 METRICS_BINAURAL = ['ild', 'icc', 'ild_pred', 'ild_gt', 'icc_pred', 'icc_gt']
 METRICS_CHANNEL = ['spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_', 'edc_', 'mse_wav']
@@ -182,15 +184,17 @@ def plot_stft(pred, gt, points, n_fft=128, fs=16000):
 
 
 def plot_stft_ambi(pred, gt, points, n_fft=128, fs=16000):
+    global AMBI_CHN
     t = np.arange(pred.shape[-1]) / fs * n_fft / 2  # 50% overlap, parametrize?
     f = np.arange(pred.shape[-2]) / (n_fft / fs)
-    channels = ['W', 'Y', 'Z', 'X']
+    components = pred.shape[1]
+    grid = int(np.sqrt(components))
 
     plt.rcParams.update({'font.size': 16})
     fig = plt.figure()
-    subfigs = fig.subfigures(2, 2)
+    subfigs = fig.subfigures(grid, grid)
     for channel, subfig in enumerate(subfigs.flat):
-        subfig.suptitle(f'{channels[channel]} channel')
+        subfig.suptitle(f'{AMBI_CHN[channel]} channel')
         axs = subfig.subplots(1, 2)
         plot1 = axs[0].pcolormesh(t, f, pred[0, channel], vmin=np.min(gt) * 1.1, vmax=np.max(gt) * 0.9)
         axs[0].set_title(f'Prediction ({points.replace("_", "─")})')
@@ -249,13 +253,15 @@ def plot_wave(pred, gt, points, sr=16000):
 
 
 def plot_wave_ambi(pred, gt, points, sr=16000):
+    global AMBI_CHN
     t = np.arange(len(gt[0])) / sr
-    channels = ['W', 'Y', 'Z', 'X']
+    components = pred.shape[0]
+    grid = int(np.sqrt(components))
 
     # plt.rcParams.update({'font.size': 16})
-    fig, axarr = plt.subplots(2, 2)
+    fig, axarr = plt.subplots(grid, grid)
     for channel, subfig in enumerate(axarr.flat):
-        subfig.set_title(f'{channels[channel]} channel')
+        subfig.set_title(f'{AMBI_CHN[channel]} channel')
         subfig.set_xlim([0, 0.08])
         subfig.set_ylim([np.min((gt, pred)) * 1.1, np.max((gt, pred)) * 1.1])
         subfig.plot(t, gt[channel], label=f'Ground-truth ({points.replace("_", "─")})', color='k', alpha=1.0)
@@ -489,22 +495,22 @@ if __name__ == '__main__':
     plt.rcParams.update({'font.size': 22})
 
     # plot error metrics for omni data, 'errors_ph' for comparisons with gt phase reconstruction
-    off_grid = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f.pkl')
-    off_grid_sh, off_grid_sh_ph = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f.pkl'), load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f_ph.pkl')
-    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f.pkl')
-    sh, sh_ph = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f.pkl'), load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f_ph.pkl')
+    off_grid = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f2.pkl')
+    off_grid_sh, off_grid_sh_ph = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f_ph.pkl')
+    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f2.pkl')
+    sh, sh_ph = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f_ph.pkl')
     full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
     directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional'],
                 'GT phase off-grid': off_grid_sh_ph['directional'], 'GT phase on-grid': sh_ph['directional']}
 
     # normal
-    '''for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
-        plot_errors(full, metric)'''
+    for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
+        plot_errors(full, metric)
     # directed
-    '''for metric in ['mse', 'rt60', 'c50']:
-        plot_errors_directional(directed, metric)'''
-    # plot_errors_binaural({'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']})
-    test(full, 'edc')
+    for metric in ['mse', 'rt60', 'c50']:
+        plot_errors_directional(directed, metric)
+    plot_errors_binaural({'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']})
+    test(full, 'rt60')
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
