@@ -141,6 +141,7 @@ def test_model(args, test_points=None, write_errors=True):
     wave_mse_window = 50 * 16  # Calculate waveform MSE for 50ms after direct sound
     cutoff = int(0.29 * 16000)  # cutoff for edc error
     error_metrics = utl.get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
+    fs = 16000
 
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)
@@ -198,12 +199,12 @@ def test_model(args, test_points=None, write_errors=True):
                 subj = src * args.subj_offset + rcv + 1
             else:
                 subj = src * args.subj_offset + rcv
-            fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
-            fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
             normalize = True
             reverb_pred = []
             # create audio files to be written as their errors are not currently calculated
             if key in args.test_points:
+                fs, mono = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/mono.wav')  # currently 'trainset' is divided into train and test data
+                fs, ambisonic = wavfile.read(f'{args.wav_base}/trainset/subject{subj}/ambisonic.wav')
                 for j in range(args.components):
                     reverb_pred.append(fftconvolve(mono, predicted_rir[j, :]))
                     if normalize and key in args.test_points:
@@ -215,7 +216,7 @@ def test_model(args, test_points=None, write_errors=True):
             # Calculate ambisonic error metrics
             delay = metrics.get_delay_samples(src_pos, rcv_pos)
             win_end = delay + wave_mse_window
-            if args.components > 1:
+            if args.components == 4:  # todo: directional errors for 2nd order?
                 error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
                 error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
                 metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, RNG, delay, error_metrics, train_test, src_pos, rcv_pos)
@@ -233,7 +234,7 @@ def test_model(args, test_points=None, write_errors=True):
                     _, edc_db_gt = metrics.get_edc(gt_rir[component])
                     rt60_gt, _ = metrics.get_rt_from_edc(edc_db_gt, fs)
                     error_metrics[train_test][component]['rt60_'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
-                    error_metrics[train_test][component]['edc_'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
+                    error_metrics[train_test][component]['edc_'].append(np.abs(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
 
                     drr_pred = 10 * np.log10(metrics.get_drr(predicted_rir[component], delay))
                     drr_gt = 10 * np.log10(metrics.get_drr(gt_rir[component], delay))
@@ -266,14 +267,22 @@ def test_model(args, test_points=None, write_errors=True):
                     # plot_wave(predicted_rir[component], gt_rir[component], f'{src}-{rcv}, ch{component}')
                     # Error metrics for each frequency band
                     for band in range(bands):
-                        # plot_wave(filtered_pred[:, band], filtered_gt[:, band], f'{src}-{rcv}, {component}-{band}')
+                        # utl.plot_wave(filtered_pred[:, band], filtered_gt[:, band], f'{src}-{rcv}, {component}-{band}')
                         error_metrics[train_test][component][band_centerfreqs[band]]['mse'].append(np.square(np.subtract(filtered_pred[delay:win_end, band], filtered_gt[delay:win_end, band])).mean())
                         _, edc_db_pred = metrics.get_edc(filtered_pred[:, band])
-                        rt60_pred, a1 = metrics.get_rt_from_edc(edc_db_pred, fs)
+                        if band == 0:
+                            offset, interval = (1, 10)
+                        elif band == 1:
+                            offset, interval = (5, 15)
+                        elif band == 2:
+                            offset, interval = (5, 20)
+                        else:
+                            offset, interval = (5, 30)
+                        rt60_pred, a1 = metrics.get_rt_from_edc(edc_db_pred, fs, offset, interval)
                         _, edc_db_gt = metrics.get_edc(filtered_gt[:, band])
-                        rt60_gt, a2 = metrics.get_rt_from_edc(edc_db_gt, fs)
+                        rt60_gt, a2 = metrics.get_rt_from_edc(edc_db_gt, fs, offset, interval)
                         error_metrics[train_test][component][band_centerfreqs[band]]['rt60'].append(np.abs(rt60_gt - rt60_pred) / rt60_gt)
-                        error_metrics[train_test][component][band_centerfreqs[band]]['edc'].append(np.square(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
+                        error_metrics[train_test][component][band_centerfreqs[band]]['edc'].append(np.abs(edc_db_pred[:cutoff] - edc_db_gt[:cutoff]).mean())
                         '''t = np.arange(len(edc_db_gt)) / fs
                         t2 = np.arange(rt60_pred * fs) / fs
                         plt.plot(t2, a1 * t2, label='pred')
@@ -282,7 +291,6 @@ def test_model(args, test_points=None, write_errors=True):
 
                         plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
                         plt.plot(t, edc_db_gt, label='Ground-truth EDC (dB)')
-                        plt.plot(t, np.ones(np.size(t)) * -60)
                         plt.scatter(rt60_pred, -60, label='Predicted RT60')
                         plt.scatter(rt60_gt, -60, label='GT RT60')
                         # measure_rt60(filtered_pred[:, band], fs, 30, True)
