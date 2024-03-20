@@ -70,7 +70,7 @@ def plot_errors(full_data, error):
     fig, ax = plt.subplots()
     plt.xticks(np.arange(7), labels)
     c = 0
-    for method in ['off-grid mono', 'off-grid omni channel', 'on-grid mono', 'on-grid omni channel']:
+    for method in full_data.keys():
         train_test = ['train', 'test'] if 'off-grid' not in method else ['test']
         for types in train_test:
             errors = []
@@ -94,10 +94,10 @@ def plot_errors(full_data, error):
     plt.show()
 
 
-def plot_errors_binaural(full_data):
+def plot_errors_binaural(full_data, comparison=False):
     # Technicall plots gt and prediction and not errors
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
-    colours = ['black', 'grey', 'green', 'mediumseagreen', 'royalblue', 'lightskyblue']
+    colours = ['black', 'grey', 'green', 'mediumseagreen', 'royalblue', 'lightskyblue'] if not comparison else ['black', 'grey', 'green', 'mediumseagreen', 'royalblue', 'lightskyblue', 'purple', 'mediumpurple']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz']
     for error in ['ild', 'icc']:
         fig, ax = plt.subplots()
@@ -493,24 +493,28 @@ def test(full_data, error, freq=250):
 
 if __name__ == '__main__':
     plt.rcParams.update({'font.size': 22})
-
+    print('Loading error metrics...', end='\r')
     # plot error metrics for omni data, 'errors_ph' for comparisons with gt phase reconstruction
     off_grid = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f2.pkl')
-    off_grid_sh, off_grid_sh_ph = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f_ph.pkl')
+    off_grid_sh, off_grid_sh_ph = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2_ph.pkl')
     mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f2.pkl')
     sh, sh_ph = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f_ph.pkl')
+    sh2 = load_pkl(f'./out/ambisonics_2_20x10/metrics/errors_f2.pkl')
     full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
     directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional'],
                 'GT phase off-grid': off_grid_sh_ph['directional'], 'GT phase on-grid': sh_ph['directional']}
+    print('Loaded error metrics')
+    k = np.mean(sh['directional']['test']['amb_edc'])
 
-    # normal
     for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
         plot_errors(full, metric)
-    # directed
+        plot_errors({'1st order': sh, '2nd order': sh2}, metric)
     for metric in ['mse', 'rt60', 'c50']:
         plot_errors_directional(directed, metric)
+        plot_errors_directional({'1st order': sh['directional'], '2nd order': sh2['directional']}, metric)
     plot_errors_binaural({'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional']})
-    test(full, 'rt60')
+    plot_errors_binaural({'1st order': sh['directional'], '2nd order': sh2['directional']}, True)
+    # test(full, 'rt60')
 
     # plot omni waveforms or edcs etc.
     gt_close_0, gt_close_sh = load_pkl('./out/tmp/0_20_gt.pkl'), load_pkl('./out/tmp/0_20_gt_sh.pkl')
