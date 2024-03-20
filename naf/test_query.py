@@ -351,6 +351,8 @@ def test_model(args, test_points=None, write_errors=True):
 
 if __name__ == '__main__':
     plt.rcParams.update({'font.size': 22})
+    # plt.rc('axes', titlesize=16)
+    # plt.rc('legend', fontsize=16)
     options = Options().parse()
     if options.test_points is not None and not options.recalculate_errors:
         print('Querying model at the wanted points for plotting and audio generation')

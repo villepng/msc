@@ -498,7 +498,7 @@ if __name__ == '__main__':
     off_grid = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f2.pkl')
     off_grid_sh, off_grid_sh_ph = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2_ph.pkl')
     mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f2.pkl')
-    sh, sh_ph = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f_ph.pkl')
+    sh, sh_ph = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f2_ph.pkl')
     sh2 = load_pkl(f'./out/ambisonics_2_20x10/metrics/errors_f2.pkl')
     full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
     directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional'],
