@@ -130,9 +130,9 @@ def test_model(args, test_points=None, write_errors=True):
     if test_points is not None:
         train_keys[orientation] = []
         test_keys[orientation] = test_points
-    '''if True:  # todo, use for now to not split off-grid data
+    if args.grid != args.model_save_loc[-len(args.grid):]:  # only test data for off-grid points
         test_keys[orientation].extend(train_keys[orientation])
-        train_keys[orientation] = []'''
+        train_keys[orientation] = []
     network = prepare_network(weight_path, args, output_device, min_pos, max_pos)
 
     # Polling the network to calculate error metrics
