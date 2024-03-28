@@ -65,7 +65,7 @@ def load_pkl(path):
 
 def plot_errors(full_data, error):
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
-    colours = ['grey', 'black', 'mediumseagreen', 'green', 'lightskyblue', 'royalblue']
+    colours = ['k', 'b', 'g', 'r']  # ['grey', 'black', 'mediumseagreen', 'green', 'lightskyblue', 'royalblue']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', 'broadband']
     fig, ax = plt.subplots()
     plt.xticks(np.arange(7), labels)
@@ -79,12 +79,19 @@ def plot_errors(full_data, error):
             errors.append(np.mean(full_data[method][types][0][f'{error}_']))  # broadband
             errors = 100 * np.array(errors) if error == 'rt60' else errors
             label = f'{method} {types}' if 'train' in train_test else f'{method}'
-            marker = 'o-' if 'mono' in method else 's-'
-            ax.plot(labels, errors, marker, label=label, color=colours[c])
-            x_left, x_right = ax.get_xlim()
-            y_low, y_high = ax.get_ylim()
-            ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
-            c += 1
+            if 'GT phase' not in method:
+                marker = 'o-' if 'mono' in method else 's-'
+                ax.plot(labels, errors, marker, label=label, color=colours[c])
+                x_left, x_right = ax.get_xlim()
+                y_low, y_high = ax.get_ylim()
+                ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
+                c += 1
+            else:
+                marker = 'o--' if 'mono' in method else 's--'
+                ax.plot(labels, errors, marker, label=label, color=colours[c - 1])
+                x_left, x_right = ax.get_xlim()
+                y_low, y_high = ax.get_ylim()
+                ax.set_aspect(abs((x_right-x_left)/(y_low-y_high)))
     if error == 'rt60':
         plt.ylabel(f'{error.upper()} error (%)')
     elif error in ['c50', 'drr']:
@@ -98,7 +105,7 @@ def plot_errors(full_data, error):
 def plot_errors_binaural(full_data, comparison=False):
     # Technicall plots gt and prediction and not errors
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
-    colours = ['black', 'grey', 'green', 'mediumseagreen'] if not comparison else ['black', 'grey', 'green', 'mediumseagreen', 'royalblue', 'lightskyblue', 'purple', 'mediumpurple']
+    colours = ['k', 'b', 'g', 'r']  # ['black', 'grey', 'green', 'mediumseagreen'] if not comparison else ['black', 'grey', 'green', 'mediumseagreen', 'royalblue', 'lightskyblue', 'purple', 'mediumpurple']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz']
     for error in ['ild', 'icc']:
         fig, ax = plt.subplots()
@@ -134,7 +141,7 @@ def plot_errors_binaural(full_data, comparison=False):
 
 def plot_errors_directional(full_data, error):
     centerfreqs = [125, 250, 500, 1000, 2000, 4000]
-    colours = ['grey', 'black', 'mediumseagreen', 'green', 'lightskyblue', 'royalblue']   # ['grey', 'mediumseagreen', 'lightskyblue', 'black', 'green', 'royalblue']
+    colours = ['k', 'b', 'g', 'r']  # ['grey', 'black', 'mediumseagreen', 'green', 'lightskyblue', 'royalblue']   # ['grey', 'mediumseagreen', 'lightskyblue', 'black', 'green', 'royalblue']
     labels = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', 'broadband']
     fig, ax = plt.subplots()
     plt.xticks(np.arange(7), labels)
@@ -450,7 +457,7 @@ def plot_tmp(gt_rir, pred_rir, pred_stft, gt_far=None, pred_far=None, fs=16000, 
         elif i in [1, 4, 7, 10]:
             subfig.set_ylabel('Energy (dB)')
         else:
-            subfig.set_ylabel('Frequency')
+            subfig.set_ylabel('Amplitude')
         subfig.set_xlabel('Time (s)')
         if i in [1, 4, 7, 10]:
             subfig.legend()
@@ -507,17 +514,19 @@ if __name__ == '__main__':
     plt.rcParams.update({'font.size': 22})
     print('Loading error metrics...', end='\r')
     # plot error metrics for omni data, 'errors_ph' for comparisons with gt phase reconstruction
-    off_grid = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f2.pkl')
+    off_grid, off_grid_ph = load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_0_10x5/metrics/errors_f2_ph.pkl')
     off_grid_sh, off_grid_sh_ph = load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_10x5/metrics/errors_f2_ph.pkl')
-    mono = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f2.pkl')
+    mono, mono_ph = load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_0_20x10/metrics/errors_f2_ph.pkl')
     sh, sh_ph = load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_1_20x10/metrics/errors_f2_ph.pkl')
     sh2, sh2_ph = load_pkl(f'./out/ambisonics_2_20x10/metrics/errors_f2.pkl'), load_pkl(f'./out/ambisonics_2_20x10/metrics/errors_f2_ph.pkl')
-    full = {'off-grid mono': off_grid, 'off-grid omni channel': off_grid_sh, 'on-grid mono': mono, 'on-grid omni channel': sh}
+    full = {'off-grid mono': off_grid, 'off-grid mono GT phase': off_grid_ph,
+            'off-grid omni channel': off_grid_sh, 'off-grid omni channel GT phase': off_grid_sh_ph,
+            'on-grid mono': mono, 'on-grid mono GT phase': mono_ph, 'on-grid omni channel': sh, 'on-grid omni channel GT phase': sh_ph}
     directed = {'off-grid': off_grid_sh['directional'], 'on-grid': sh['directional'],
                 'GT phase off-grid': off_grid_sh_ph['directional'], 'GT phase on-grid': sh_ph['directional']}
     print('Loaded error metrics')
 
-    for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
+    '''for metric in ['mse', 'rt60', 'drr', 'c50', 'edc']:
         plot_errors(full, metric)
         plot_errors({'1st order': sh, '2nd order': sh2}, metric)
     for metric in ['mse', 'rt60', 'c50']:
@@ -526,7 +535,7 @@ if __name__ == '__main__':
     plot_errors_binaural({'off-grid': off_grid_sh['directional'], 'off-grid prediction GT phase': off_grid_sh_ph['directional'],
                           'on-grid': sh['directional'], 'on-grid prediction GT phase': sh_ph['directional']})
     plot_errors_binaural({'1st order': sh['directional'], '1st order GT phase': sh_ph['directional'],
-                          '2nd order': sh2['directional'], '2nd order GT phase': sh2_ph['directional']})
+                          '2nd order': sh2['directional'], '2nd order GT phase': sh2_ph['directional']})'''
     # test(full, 'rt60')
     # test(directed, 'ild', True)
     # test(directed, 'icc', True)
