@@ -101,7 +101,7 @@ def main():
     # pathlib.Path(early_path).mkdir(parents=True, exist_ok=True)
     rooms = [args.apt]  # option for many?
     max_len_dict = {}
-    spec_getter = GetSpec(components=args.components)
+    spec_getter = GetSpec(components=args.components, sr=args.sr)
     with open(f'../../../data/generated/rirs/ambisonics_{args.order}/room_{args.room}/grid_{args.grid}/rirs.pickle', 'rb') as f:
         rirs = pickle.load(f)
 

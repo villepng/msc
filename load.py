@@ -97,10 +97,10 @@ def main():
                 rirs.update({f'130-{i}': []})
             rirs[f'130-{i}'].append(rir)
 
-    # reformat to match original data
+    # reformat to match original data, todo: normalize? (/to float)
     for key, item in rirs.items():
         rirs[key] = np.array(item).T
-    rir_save_path = f'../data/generated/rirs/ambisonics_1/room_7.5x9.0x3.5/grid10x13'
+    rir_save_path = f'../data/generated/rirs/ambisonics_1/room_7.5x9.0x3.5/grid_10x13'
     check_and_create_dir(rir_save_path)
     with open(f'{rir_save_path}/rirs.pickle', 'wb') as f:
         pickle.dump(rirs, f)
