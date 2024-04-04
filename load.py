@@ -85,9 +85,12 @@ def main():
 
     folder = '../data/isophonics/'
     rirs = {}
+    max_val = -np.inf
     for chn in ['W', 'Y', 'Z', 'X']:
         for file in pathlib.Path(f'{folder}/classroom{chn}/{chn}/').glob('*.wav'):
             fs, rir = wavfile.read(file)
+            if np.max(rir) > max_val:
+                max_val = np.max(rir)
             # plt.plot(rir)
             # plt.show()
             info = file.parts[-1][1:6]
@@ -97,9 +100,9 @@ def main():
                 rirs.update({f'130-{i}': []})
             rirs[f'130-{i}'].append(rir)
 
-    # reformat to match original data, todo: normalize? (/to float)
+    # reformat to match original data
     for key, item in rirs.items():
-        rirs[key] = np.array(item).T
+        rirs[key] = np.array(item).T / max_val
     rir_save_path = f'../data/generated/rirs/ambisonics_1/room_7.5x9.0x3.5/grid_10x13'
     check_and_create_dir(rir_save_path)
     with open(f'{rir_save_path}/rirs.pickle', 'wb') as f:
