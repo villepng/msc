@@ -53,9 +53,9 @@ def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.arr
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.array, heights: np.array = None,
-                          room: np.array = None, rt60: float = None, order: int = None, rm_delay: bool = None,
-                          args: argparse.Namespace = None) -> None:
+def generate_rir_audio_sh(src_points: np.array, save_path: str, audio_paths: np.array, heights: np.array = None,
+                          room: np.array = None, fs: float = None, order: int = None, rm_delay: bool = None,
+                          args: argparse.Namespace = None, rcv_points: np.array = None) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated.
     RIR parameters can be given in args or separately
@@ -71,7 +71,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     :param audio_paths: array with paths to audio dataset wav files
     :param heights: array with source height and listener height, currently heights stay constant for all points
     :param room: room size x*y*z, where z is height
-    :param rt60: reverberation time
+    :param fs: sample rate of rirs
     :param order: ambisonics order used
     :param rm_delay: true if sound travel time delay should be removed from generated audio
     :param args: startup arguments which can have the required RIR parameters instead of them being given separately
@@ -82,45 +82,34 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     if args is not None:  # could have checks that other parameters are given if not using args?
         heights = np.array(args.heights)
         room = np.array(args.room)
-        rt60 = args.rt60
+        fs = args.fs
         order = args.order
         rm_delay = args.rm_delay
 
     components = (order + 1) ** 2
-    # nBands = 1
-    # band_centerfreqs = np.empty(nBands)
-    # band_centerfreqs[0] = 1000
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
-    # abs_wall = srs.find_abs_coeffs_from_rt(room, rt60)[0]  # basic absorption
     abs_wall = np.array([MATERIALS['drapery'], MATERIALS['glass'], MATERIALS['brick'],
-                         MATERIALS['brick'], MATERIALS['carpet'], MATERIALS['plaster']]).T
-    # rt60 = np.array([rt60])
-    rt60, _, _ = srs.room_stats(room, abs_wall, False)
-    # maxlim = 0.8  # 0.8, 1s
-    # limits = np.empty(nBands)
-    # limits.fill(np.minimum(rt60[0], maxlim))
+                         MATERIALS['brick'], MATERIALS['carpet'], MATERIALS['plaster']]).T  # todo: this and limits as parameters
     limits = 1.0 * np.array([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])  # 1.0, 0.5, 0.8
+    if rcv_points is None:
+        rcv_points = src_points
 
     audio_index = 0
     data_index = 0
     minmax = [np.inf, -np.inf]
-    progress = tqdm.tqdm(enumerate(points))  # todo: pathlib seems to not work well with eta, possible fixes?
+    progress = tqdm.tqdm(enumerate(src_points))  # todo: pathlib seems to not work well with eta, possible fixes?
     # First loop to generate RIRs and reverberant audio, then normalize before saving the actual wav files
     for i, src_pos in progress:
-        progress.set_description(f'Calculating RIRs for each other point at grid point: {i + 1}/{len(points)}')
-        for j, recv_pos in enumerate(points):
+        for j, recv_pos in enumerate(rcv_points):
             if j == i:
                 continue  # skip if source and listener are at the same point
+            progress.set_description(f'Calculating RIRs between source and receiver: {i}-{j} (max: {len(src_points) - 1}-{len(rcv_points) - 1})')
 
-            # Load data
-            fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
-            # audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
+            # Generate/load SH RIRs
             source = np.array([[src_pos[0], src_pos[1], heights[0]]])
             receiver = np.array([[recv_pos[0], recv_pos[1], heights[1]]])
             if rm_delay:
                 delay_samples = int(((src_pos[0] - recv_pos[0]) ** 2 + (src_pos[1] - recv_pos[1]) ** 2 + (heights[0] - heights[1]) ** 2) ** (1 / 2) / SOUND_V * fs)
-
-            # Generate/load SH RIRs
             if f'{i}-{j}' in RIRS:
                 sh_rirs = RIRS[f'{i}-{j}']
             else:
@@ -137,7 +126,9 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # Apply RIRs, check min/max for normalization and store metadata, currently mono is not normalized as it's only used for listening
             subject = data_index + 1
             # audio_length = len(audio_anechoic)  # this can be used to limit reverberant audio length to make sure it matches with mono length and coordinate data
-            if i == 0:  # limit reverberant audio saving to the first points to save space
+            if i == 0:  # limit reverberant audio saving to the first points to save storage space, todo: parameter
+                fs, audio_anechoic = wavfile.read(audio_paths[audio_index])
+                # audio_anechoic = np.append(audio_anechoic, np.zeros([400 - len(audio_anechoic) % 400]))  # pad to get equal lengths with coordinate files
                 reverberant_signal = []  # np.zeros((audio_length, components))
                 pathlib.Path(f'{save_path}/subject{subject}').mkdir(parents=True)
                 wavfile.write(f'{save_path}/subject{subject}/mono.wav', fs, audio_anechoic.astype(np.int16))
@@ -149,7 +140,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
                 reverberant_signal = np.array(reverberant_signal).T
                 if np.min(reverberant_signal) < minmax[0]: minmax[0] = np.min(reverberant_signal)
                 if np.max(reverberant_signal) > minmax[1]: minmax[1] = np.max(reverberant_signal)
-                # Temporarily store non-normalized reverberant audio, will be very loud
+                # Temporarily store non-normalized reverberant audio to not fill up memory, will be very loud
                 wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal)
                 save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
                                  fs=fs, audio_length=400, path=f'{save_path}/subject{data_index + 1}')  # using 400 to only write the coordinates once
@@ -231,7 +222,7 @@ def parse_input_args():
     parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: give delta instead of points?
     parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
-    parser.add_argument('--rt60', default=0.2, type=float, help='reverberation time of the room')
+    parser.add_argument('--fs', default=16000, type=float, help='sample rate of the rirs')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
     parser.add_argument('--rm_delay', action='store_true', help='remove travel time delay from generated audio files')
     parser.add_argument('--skip_rir_write', action='store_true', help='by default RIRs are saved according to their parameters under save_path')
