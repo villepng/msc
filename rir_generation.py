@@ -99,7 +99,7 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
     # maxlim = 0.8  # 0.8, 1s
     # limits = np.empty(nBands)
     # limits.fill(np.minimum(rt60[0], maxlim))
-    limits = 0.8 * np.array([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])  # 1.0, 0.5, 0.8
+    limits = 1.0 * np.array([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])  # 1.0, 0.5, 0.8
 
     audio_index = 0
     data_index = 0
@@ -137,21 +137,22 @@ def generate_rir_audio_sh(points: np.array, save_path: str, audio_paths: np.arra
             # Apply RIRs, check min/max for normalization and store metadata, currently mono is not normalized as it's only used for listening
             subject = data_index + 1
             # audio_length = len(audio_anechoic)  # this can be used to limit reverberant audio length to make sure it matches with mono length and coordinate data
-            reverberant_signal = []  # np.zeros((audio_length, components))
-            pathlib.Path(f'{save_path}/subject{subject}').mkdir(parents=True)
-            wavfile.write(f'{save_path}/subject{subject}/mono.wav', fs, audio_anechoic.astype(np.int16))
-            # t = np.arange(len(sh_rirs[:, 0])) / fs
-            for k in range(components):
-                # plt.plot(t, sh_rirs[:, k])
-                reverberant_signal.append(fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze()))
-            # plt.show()
-            reverberant_signal = np.array(reverberant_signal).T
-            if np.min(reverberant_signal) < minmax[0]: minmax[0] = np.min(reverberant_signal)
-            if np.max(reverberant_signal) > minmax[1]: minmax[1] = np.max(reverberant_signal)
-            # Temporarily store non-normalized reverberant audio, will be very loud
-            wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal)
-            save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
-                             fs=fs, audio_length=400, path=f'{save_path}/subject{data_index + 1}')  # using 400 to only write the coordinates once
+            if i == 0:  # limit reverberant audio saving to the first points to save space
+                reverberant_signal = []  # np.zeros((audio_length, components))
+                pathlib.Path(f'{save_path}/subject{subject}').mkdir(parents=True)
+                wavfile.write(f'{save_path}/subject{subject}/mono.wav', fs, audio_anechoic.astype(np.int16))
+                # t = np.arange(len(sh_rirs[:, 0])) / fs
+                for k in range(components):
+                    # plt.plot(t, sh_rirs[:, k])
+                    reverberant_signal.append(fftconvolve(audio_anechoic, sh_rirs[:, k].squeeze()))
+                # plt.show()
+                reverberant_signal = np.array(reverberant_signal).T
+                if np.min(reverberant_signal) < minmax[0]: minmax[0] = np.min(reverberant_signal)
+                if np.max(reverberant_signal) > minmax[1]: minmax[1] = np.max(reverberant_signal)
+                # Temporarily store non-normalized reverberant audio, will be very loud
+                wavfile.write(f'{save_path}/subject{subject}/ambisonic.wav', fs, reverberant_signal)
+                save_coordinates(source=np.array([src_pos[0], src_pos[1], heights[0]]), listener=np.array([recv_pos[0], recv_pos[1], heights[1]]),
+                                 fs=fs, audio_length=400, path=f'{save_path}/subject{data_index + 1}')  # using 400 to only write the coordinates once
 
             audio_index += 1
             data_index += 1
@@ -277,7 +278,7 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
 
 
 def write_coordinate_metadata(grid: np.array, heights: list, room: list, room_name: str, save_path: str) -> None:
-    """ Save the index and coordinates for each unique point in the grid as metadate, 0 1.0, 1.0, 1.5 etc.,
+    """ Save the index and coordinates for each unique point in the grid as metadata, 0 1.0, 1.0, 1.5 etc.,
     as well as min/max coordinates in the room
 
     :param grid: x-y coordinate grid
