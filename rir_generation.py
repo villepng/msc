@@ -271,11 +271,12 @@ def save_coordinates(source: np.array, listener: np.array, fs: int, audio_length
     listener_file.close()
 
 
-def write_coordinate_metadata(grid: np.array, heights: list, room: list, room_name: str, save_path: str) -> None:
+def write_coordinate_metadata(grid: np.array, grid_rcv: np.array, heights: list, room: list, room_name: str, save_path: str) -> None:
     """ Save the index and coordinates for each unique point in the grid as metadata, 0 1.0, 1.0, 1.5 etc.,
     as well as min/max coordinates in the room
 
-    :param grid: x-y coordinate grid
+    :param grid: x-y source coordinate grid
+    :param grid_rcv: x-y source coordinate grid
     :param heights: heights of the sources and listeners, currently only uses one value
     :param room: room size
     :param room_name: name of the room for naming files and folders
@@ -287,17 +288,23 @@ def write_coordinate_metadata(grid: np.array, heights: list, room: list, room_na
         check_and_create_dir(path)
     if pathlib.Path(f'{paths[0]}/points.txt').is_file():
         pathlib.Path(f'{paths[0]}/points.txt').unlink()
+    if pathlib.Path(f'{paths[0]}/points_rcv.txt').is_file():
+        pathlib.Path(f'{paths[0]}/points_rcv.txt').unlink()
     with open(f'{paths[0]}/points.txt', 'a+') as f:
         for i, point in enumerate(grid):
+            f.write(f'{i} {point[0]} {point[1]} {heights[0]}\n')
+    with open(f'{paths[0]}/points_rcv.txt', 'a+') as f:
+        for i, point in enumerate(grid_rcv):
             f.write(f'{i} {point[0]} {point[1]} {heights[0]}\n')
     with open(f'{paths[1]}/{room_name}_minmax.pkl', 'wb') as f:
         pickle.dump((np.array([0.0, 0.0, 0.0]), np.array(room)), f)
 
 
-def write_split_metadata(grid: np.array, room_name: str, save_path: str) -> None:
+def write_split_metadata(grid: np.array, grid_rcv: np.array, room_name: str, save_path: str) -> None:
     """ Create and store train/test split for point pairs that can be used as metadata for NAFs
 
-    :param grid: x-y coordinate grid
+    :param grid: x-y source coordinate grid
+    :param grid_rcv: x-y receiver coordinate grid
     :param room_name: name of the room for naming files and folders
     :param save_path: path to save the pickle file
     :return:
@@ -305,15 +312,14 @@ def write_split_metadata(grid: np.array, room_name: str, save_path: str) -> None
     rng = np.random.default_rng(0)
     save_path = f'{save_path}/train_test_split'
     check_and_create_dir(save_path)
-    points = grid.shape[0]
     data = []
-    for i in range(points):
-        for j in range(points):
-            if i == j:
+    for i, src in enumerate(grid):
+        for j, rcv in enumerate(grid_rcv):
+            if np.array_equal(src, rcv):
                 continue
             data.append(f'{i}_{j}')
     rng.shuffle(data)
-    pairs = points * (points - 1)
+    pairs = len(data)
     train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
     split = [{0: data[:train]}, {0: data[train:train+test]}]
     with open(f'{save_path}/{room_name}_complete.pkl', 'wb') as f:
@@ -354,9 +360,9 @@ def main():
 
     # Store extra metadata
     if not args.skip_coord_write:
-        write_coordinate_metadata(grid, args.heights, args.room, args.room_name, metadata_path)
+        write_coordinate_metadata(grid, grid_rcv, args.heights, args.room, args.room_name, metadata_path)
     if not args.skip_split_write:
-        write_split_metadata(grid, args.room_name, metadata_path)
+        write_split_metadata(grid, grid_rcv, args.room_name, metadata_path)
 
     # Create dataset
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
