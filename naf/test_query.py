@@ -138,10 +138,10 @@ def test_model(args, test_points=None, write_errors=True):
     # Polling the network to calculate error metrics
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     bands = len(band_centerfreqs)
-    wave_mse_window = 50 * 16  # Calculate waveform MSE for 50ms after direct sound
-    cutoff = int(0.29 * 16000)  # cutoff for edc error
+    wave_mse_window = 50 * args.sr // 1000  # Calculate waveform MSE for 50ms after direct sound
+    cutoff = int(0.29 * args.sr)  # cutoff for edc error
     error_metrics = utl.get_error_metric_dict(args.components, band_centerfreqs)  # train, channel, band, metrics
-    fs = 16000
+    fs = args.sr
 
     for train_test, keys in {'train': train_keys[orientation], 'test': test_keys[orientation]}.items():
         progress = tqdm.tqdm(keys)

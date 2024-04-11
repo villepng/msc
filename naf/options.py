@@ -18,7 +18,7 @@ class Options:
         self.parser = argparse.ArgumentParser(description='Parameters for various scripts related to NAFs, if paths are not given, '
                                                           'default values for them are generated based on the ambisonics order and grid size')
         self.initialized = False
-        self.room_sizes = {'test_1': '10.0x6.0x2.5', 'test_2': '4.0x5.75x2.5', 'test_3': '6.0x6.0x3.0', 'real_1': '7.5x9.0x3.5'}
+        self.room_sizes = {'test_1': '10.0x6.0x2.5', 'test_2': '4.0x5.75x2.5', 'test_3': '6.0x6.0x3.0', 'real_1': '7.5x9.0x3.5', 'test_1_2': '10.0x6.0x2.5'}
 
     def check_paths(self):
         """
@@ -50,7 +50,7 @@ class Options:
 
     def initialize(self):
         parser = self.parser
-        parser.add_argument('--apt', default='test_1', choices=['test_1', 'test_2', 'test_3', 'real_1'], type=str)
+        parser.add_argument('--apt', default='test_1', choices=['test_1', 'test_2', 'test_3', 'real_1', 'test_1_2'], type=str)
         parser.add_argument('--grid', default='20x10', type=str)
         parser.add_argument('--order', default='1')
         parser.add_argument('--exp_name', default='{}')
@@ -103,7 +103,7 @@ class Options:
         self.opt = self.parser.parse_args()
         self.check_paths()
         self.opt.freq_bins = self.opt.n_fft // 2
-        self.opt.max_len = {'test_1': 84, 'test_2': 47, 'test_3': 66, 'real_1': 3002}  # Calculated when generating the dataset, 45 with fft_size 512
+        self.opt.max_len = {'test_1': 84, 'test_2': 47, 'test_3': 66, 'real_1': 3002, 'test_1_2': 159}  # Calculated when generating the dataset, 45 with fft_size 512
         self.opt.subj_offset = int(self.opt.grid.split('x')[0]) * int(self.opt.grid.split('x')[1]) - 1  # Offset to convert between 'subjects' and points, see test_query.py before error metric calculation
         self.opt.components = int((int(self.opt.order) + 1) ** 2)
         self.opt.room = self.room_sizes[self.opt.apt]
