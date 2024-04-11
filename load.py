@@ -61,11 +61,8 @@ def write_split_metadata(grid: np.array, room_name: str, save_path: str) -> None
     check_and_create_dir(save_path)
     points = grid.shape[0]
     data = []
-    for i in range(points):
-        for j in range(points):
-            if i == j:
-                continue
-            data.append(f'{i}_{j}')
+    for i in range(points - 1):
+        data.append(f'{130}_{i}')  # todo: check and set from 12 source points
     rng.shuffle(data)
     pairs = points * (points - 1)
     train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
