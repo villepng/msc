@@ -37,25 +37,25 @@ def check_and_create_dir(path: str) -> None:
         pathlib.Path(path).mkdir(parents=True)
 
 
-def create_grid(points: np.array, wall_gap: float, room_dim: np.array) -> np.array:
+def create_grid(points: np.array, wall_gap: np.array, room_dim: np.array) -> np.array:
     """ Create a grid of (x, y) coordinates with specified amount of points (x_points * y_points)
 
     :param points: grid points in x and y directions, total points will be x*y
-    :param wall_gap: minimum distance between walls and grid points
+    :param wall_gap: minimum distance between walls and grid points in x and y directions, with 2 values for each direction
     :param room_dim: room size x*y*z, where z is height
     :return: numpy array with x,y coordinate pairs
 
     """
-    x = np.linspace(wall_gap, room_dim[0] - wall_gap, points[0])
-    y = np.linspace(wall_gap, room_dim[1] - wall_gap, points[1])
+    x = np.linspace(wall_gap[0], room_dim[0] - wall_gap[1], points[0])
+    y = np.linspace(wall_gap[2], room_dim[1] - wall_gap[3], points[1])
     xx, yy = np.meshgrid(x, y)
 
     return np.vstack([xx.ravel(), yy.ravel()]).T
 
 
-def generate_rir_audio_sh(src_points: np.array, save_path: str, audio_paths: np.array, heights: np.array = None,
-                          room: np.array = None, fs: float = None, order: int = None, rm_delay: bool = None,
-                          args: argparse.Namespace = None, rcv_points: np.array = None) -> None:
+def generate_rir_audio_sh(src_points: np.array, rcv_points: np.array, save_path: str, audio_paths: np.array,
+                          heights: np.array = None, room: np.array = None, fs: float = None, order: int = None,
+                          rm_delay: bool = None, args: argparse.Namespace = None) -> None:
     """ Apply spherical harmonics RIR for specified audio at specified points; 
     for each point in the grid RIR applied audio at every other point is generated.
     RIR parameters can be given in args or separately
@@ -66,7 +66,8 @@ def generate_rir_audio_sh(src_points: np.array, save_path: str, audio_paths: np.
     |
     O ⎯ Y ⎯ >
 
-    :param points: coordinate grid (x,y) in the room where RIR is calculated
+    :param src_points: source coordinate grid (x,y) in the room where RIR is calculated
+    :param rcv_points: receiver coordinate grid (x,y) in the room where RIR is calculated
     :param save_path: folder where to save the created audio files
     :param audio_paths: array with paths to audio dataset wav files
     :param heights: array with source height and listener height, currently heights stay constant for all points
@@ -101,7 +102,7 @@ def generate_rir_audio_sh(src_points: np.array, save_path: str, audio_paths: np.
     # First loop to generate RIRs and reverberant audio, then normalize before saving the actual wav files
     for i, src_pos in progress:
         for j, recv_pos in enumerate(rcv_points):
-            if j == i:
+            if np.array_equal(src_pos, recv_pos):
                 continue  # skip if source and listener are at the same point
             progress.set_description(f'Calculating RIRs between source and receiver: {i}-{j} (max: {len(src_points) - 1}-{len(rcv_points) - 1})')
 
@@ -219,8 +220,10 @@ def parse_input_args():
     parser.add_argument('-n', '--naf_path', default='msc/naf/metadata', type=str, help='path (from current parent folder) where to save additional naf metadata')
     parser.add_argument('-r', '--room', nargs=3, default=[10.0, 6.0, 2.5], type=float, help='room size as (x y z)', metavar=('room_x', 'room_y', 'room_z'))  # 20 cm min distance between points
     parser.add_argument('--room_name', default='test_1', type=str, help='name of the room for NAF, use separate name for different sizes')
-    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='grid points in each axis (x y)', metavar=('x_n', 'y_n'))  # todo: give delta instead of points?
-    parser.add_argument('-w', '--wall_gap', default=1.0, type=float, help='minimum gap between walls and grid points')
+    parser.add_argument('-g', '--grid', nargs=2, default=[2, 2], type=int, help='source grid points in each axis (x y)', metavar=('x_n', 'y_n'))
+    parser.add_argument('--grid_rcv', nargs=2, type=int, help='receiver grid points in each axis (x y), will be source grid if not given', metavar=('x_n', 'y_n'))
+    parser.add_argument('-w', '--wall_gap', nargs=4, default=[1.0, 1.0, 1.0, 1.0], type=float, help='minimum gap between walls and source grid points with 2 values for each axis')
+    parser.add_argument('--wall_gap_rcv', nargs=4, type=float, help='minimum gap between walls and receiver grid points with 2 values for each axis')
     parser.add_argument('--heights', nargs=2, default=[1.5, 1.5], type=float, help='heights for the source and the listener', metavar=('source_height', 'listener_height'))
     parser.add_argument('--fs', default=16000, type=float, help='sample rate of the rirs')
     parser.add_argument('-o', '--order', default=1, type=int, help='ambisonics order')
@@ -322,7 +325,10 @@ def main():
     global RIRS
     args = parse_input_args()
     print(f'Generating SH RIR audio dataset in a room of size {args.room[0]}m*{args.room[1]}m*{args.room[2]}m with {args.grid[0]}x{args.grid[1]} grid and SH order {args.order}')
-    grid = create_grid(np.array(args.grid), args.wall_gap, np.array(args.room))
+    grid = create_grid(np.array(args.grid), np.array(args.wall_gap), np.array(args.room))
+    if args.wall_gap_rcv is None:
+        args.wall_gap_rcv = args.wall_gap
+    grid_rcv = grid if args.grid_rcv is None else create_grid(np.array(args.grid_rcv), np.array(args.wall_gap_rcv), np.array(args.room))
 
     # Get dataset and save paths, load existing RIRs if possible
     parent_dir = str(pathlib.Path.cwd().parent)
@@ -352,12 +358,9 @@ def main():
     if not args.skip_split_write:
         write_split_metadata(grid, args.room_name, metadata_path)
 
-    # Create dataset divided into trainset and testset
+    # Create dataset
     audio_paths = get_audio_paths(f'{audio_data_path}/train_data.csv')
-    generate_rir_audio_sh(grid, f'{save_path}/trainset', audio_paths, args=args)
-    # audio_paths = get_audio_paths(f'{audio_data_path}/test_data.csv')
-    # grid = create_grid(np.array([8, 4]), args.wall_gap, np.array(args.room))  # generate testset differently (smaller, different points?) (trainset is divided for NAFs)
-    # generate_rir_audio_sh(grid, f'{save_path}/testset', audio_paths, args=args)
+    generate_rir_audio_sh(grid, grid_rcv, f'{save_path}/trainset', audio_paths, args=args)  # includes train/test-divide even though naming is different
 
     # Save calculated RIRs
     if not args.skip_rir_write:  # might technically need even more specific file names
