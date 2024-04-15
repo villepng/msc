@@ -65,11 +65,19 @@ def load_gt_data(args):
         readout = [float(xyz) for xyz in row[1:]]
         positions[row[0]] = [readout[0], readout[1]]
 
+    with open(f'{args.coor_base}/{args.apt}/points_rcv.txt', 'r') as f:
+        lines = f.readlines()
+    points = [x.replace('\n', '').split(' ') for x in lines]
+    positions_rcv = dict()
+    for row in points:
+        readout = [float(xyz) for xyz in row[1:]]
+        positions_rcv[row[0]] = [readout[0], readout[1]]
+
     train_test_split = utl.load_pkl(f'{args.split_loc}/{args.apt}_complete.pkl')
     train_keys = train_test_split[0]
     test_keys = train_test_split[1]
 
-    return spec_obj, phase_obj, positions, train_keys, test_keys, float(max_val[0])
+    return spec_obj, phase_obj, positions, positions_rcv, train_keys, test_keys, float(max_val[0])
 
 
 def prepare_input(orientation_idx, reciever_pos, source_pos, max_len, min_bbox_pos, max_bbox_pos, freq_bins):
@@ -126,7 +134,7 @@ def test_model(args, test_points=None, write_errors=True):
     mean = torch.from_numpy(mean_std[0]).float()
     std = 3.0 * torch.from_numpy(mean_std[1]).float()
     # std_phase = 3.0 * torch.from_numpy(mean_std[2]).float()
-    spec_obj, phase_obj, points, train_keys, test_keys, max_val = load_gt_data(args)
+    spec_obj, phase_obj, points, points_rcv, train_keys, test_keys, max_val = load_gt_data(args)
     if test_points is not None:
         train_keys[orientation] = []
         test_keys[orientation] = test_points
@@ -149,7 +157,7 @@ def test_model(args, test_points=None, write_errors=True):
         for i, key in enumerate(progress):
             full_key = f'{orientation}_{key}'
             src, rcv = key.split('_')
-            src_pos, rcv_pos = points[src], points[rcv]
+            src_pos, rcv_pos = points[src], points_rcv[rcv]
             spec_data0, phase_data0 = spec_obj[full_key][:], phase_obj[full_key][:]
             try:
                 spec_data, phase_data = ((spec_data0.reshape(1, args.components, args.freq_bins, max_len)),
@@ -182,8 +190,8 @@ def test_model(args, test_points=None, write_errors=True):
             full_phase[:, :, :, 13:] = rp'''
 
             # Convert into time domain to calculate most metrics
-            # predicted_rir = utl.to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
-            predicted_rir = utl.to_wave(output[0], args.hop_len)  # [channels, length], random phase
+            predicted_rir = utl.to_wave_if(output[0], phase_data[0], args.hop_len)  # using original phases
+            # predicted_rir = utl.to_wave(output[0], args.hop_len)  # [channels, length], random phase
             # predicted_rir = utl.to_wave_if(output[0], phase[0], args.hop_len)  # predicted phase
             # predicted_rir = utl.to_wave_if(spec_data[0], phase[0], args.hop_len)  # predicted and random phase
             gt_rir = utl.to_wave_if(spec_data[0], phase_data[0], args.hop_len)  # could also load original RIR, but shouldn't matter
@@ -216,13 +224,13 @@ def test_model(args, test_points=None, write_errors=True):
             # Calculate ambisonic error metrics
             delay = metrics.get_delay_samples(src_pos, rcv_pos)
             win_end = delay + wave_mse_window
-            if args.components > 1:
+            if args.components > 1 and False:
                 error_metrics['directional'][train_test]['amb_e'].append(metrics.get_ambisonic_energy_err(predicted_rir, gt_rir))
                 error_metrics['directional'][train_test]['amb_edc'].append(metrics.get_ambisonic_edc_err(predicted_rir, gt_rir))
                 metrics.calculate_directed_rir_errors(predicted_rir, gt_rir, RNG, delay, error_metrics, train_test, src_pos, rcv_pos)
                 metrics.calculate_binaural_error_metrics(predicted_rir, gt_rir, RNG, error_metrics, train_test, src, rcv, order=int(args.order))
 
-            if True:  # and key in args.test_points
+            if True and '6_' in key:  # and key in args.test_points
                 # Filter and calculate error metrics
                 for component in range(args.components):  # 'spec_err_', 'mse_', 'rt60_', 'drr_', 'c50_'
                     # Overall error metrics for each component
@@ -307,9 +315,11 @@ def test_model(args, test_points=None, write_errors=True):
                         error_metrics[train_test][component][band_centerfreqs[band]]['c50'].append(np.abs(c50_gt - c50_pred))
 
             # Plot some examples for checking the results
-            if i < 1 and False:
-                utl.plot_stft(output, spec_data, key)
-                utl.plot_wave(predicted_rir[0], gt_rir[0], key)
+            if '6_' in key and key in test_keys[orientation]:
+                utl.plot_stft_ambi(output, spec_data, key)
+                utl.plot_wave_ambi(predicted_rir, gt_rir, key)
+                # utl.plot_stft(output, spec_data, key)
+                # utl.plot_wave(predicted_rir[0], gt_rir[0], key)
                 # utl.plot_wave(reverb_pred[:, 0], ambisonic[:, 0], key, 'audio waveform')
                 # t = np.arange(len(edc_db_gt)) / fs
                 # plt.plot(t, edc_db_pred, label='Predicted EDC (dB)')
