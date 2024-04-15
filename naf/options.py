@@ -103,7 +103,7 @@ class Options:
         self.opt = self.parser.parse_args()
         self.check_paths()
         self.opt.freq_bins = self.opt.n_fft // 2
-        self.opt.max_len = {'test_1': 84, 'test_2': 47, 'test_3': 66, 'real_1': 3002, 'test_1_2': 159}  # Calculated when generating the dataset, 45 with fft_size 512
+        self.opt.max_len = {'test_1': 84, 'test_2': 47, 'test_3': 66, 'real_1': 259, 'test_1_2': 159}  # Calculated when generating the dataset, 45 with fft_size 512
         self.opt.subj_offset = int(self.opt.grid.split('x')[0]) * int(self.opt.grid.split('x')[1]) - 1  # Offset to convert between 'subjects' and points, see test_query.py before error metric calculation
         self.opt.components = int((int(self.opt.order) + 1) ** 2)
         self.opt.room = self.room_sizes[self.opt.apt]

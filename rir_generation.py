@@ -91,7 +91,8 @@ def generate_rir_audio_sh(src_points: np.array, rcv_points: np.array, save_path:
     band_centerfreqs = np.array([125, 250, 500, 1000, 2000, 4000])
     abs_wall = np.array([MATERIALS['drapery'], MATERIALS['glass'], MATERIALS['brick'],
                          MATERIALS['brick'], MATERIALS['carpet'], MATERIALS['plaster']]).T  # todo: this and limits as parameters
-    limits = 1.0 * np.array([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])  # 1.0, 0.5, 0.8
+    # abs_wall = srs.find_abs_coeffs_from_rt(room, np.array([4.5, 1.8, 1.6, 1.5, 1.8, 1.5]))[0]
+    limits = 1.0 * np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0])  # 1.0, 0.5, 0.8 x 0.3; originally 2s in real data
     if rcv_points is None:
         rcv_points = src_points
 

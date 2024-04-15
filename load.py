@@ -62,7 +62,7 @@ def write_split_metadata(grid: np.array, room_name: str, save_path: str) -> None
     points = grid.shape[0]
     data = []
     for i in range(points - 1):
-        data.append(f'{130}_{i}')  # todo: check and set from 12 source points
+        data.append(f'{6}_{i}')
     rng.shuffle(data)
     pairs = points * (points - 1)
     train, test = int(np.floor(pairs * 0.9)), int(np.ceil(pairs * 0.1))
@@ -77,8 +77,8 @@ def main():
     check_and_create_dir(save_path)
     grid = create_grid([10, 13], [2.0, 1.0, 1.5, 1.5], [7.5, 9, 3.5])
     grid = np.concatenate((grid, np.array([[0.5, 4.5]])))  # tmp speaker position
-    write_coordinate_metadata(grid, [1.5, 1.5], [8, 8, 3.5], room, save_path)
-    write_split_metadata(grid, room, save_path)
+    # write_coordinate_metadata(grid, [1.5, 1.5], [8, 8, 3.5], room, save_path)
+    # write_split_metadata(grid, room, save_path)
 
     folder = '../data/isophonics/'
     rirs = {}
@@ -93,9 +93,9 @@ def main():
             info = file.parts[-1][1:6]
             x, y = float(info[-2:]) / 10 + 2.0, float(info[:2]) / 10 + 1.5  # flip to match with original coordinate system and add wall gaps
             i = find_index(grid, np.array([x, y]))
-            if f'130-{i}' not in rirs:
-                rirs.update({f'130-{i}': []})
-            rirs[f'130-{i}'].append(rir)
+            if f'6-{i}' not in rirs:
+                rirs.update({f'6-{i}': []})
+            rirs[f'6-{i}'].append(rir)
 
     # reformat to match original data
     for key, item in rirs.items():
@@ -105,8 +105,8 @@ def main():
     with open(f'{rir_save_path}/rirs.pickle', 'wb') as f:
         pickle.dump(rirs, f)
 
-    plot_wave_ambi(rirs['130-0'].T, rirs['130-0'].T, 'test', fs)
-    # plt.plot(rirs['130-0'][0])
+    plot_wave_ambi(rirs['6-0'].T, rirs['6-0'].T, 'test', fs)
+    # plt.plot(rirs['6-0'][0])
     # plt.show()
 
 
